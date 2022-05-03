@@ -1,3 +1,6 @@
+
+![Demo2 Screenshot](Docs/demo2_screenshot.png)
+
 # Quick start on Windows
 
 ## Required Tools
