@@ -109,7 +109,7 @@ if (USE_SDL)
         # NOTE: for some reason the Debug build always goes for dll, so we
         #  must make it. arghh
         set(SDL_SHARED TRUE )
-        set(SDL_STATIC TRUE )
+        set(SDL_STATIC FALSE )
         add_subdirectory( externals/SDL2 )
 
         set(SDL_ROOT_DIR ${CMAKE_BINARY_DIR}/externals/SDL2)
