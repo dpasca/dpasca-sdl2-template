@@ -1,7 +1,5 @@
 
-![Demo2 Screenshot](Docs/demo2_screenshot.png)
-
-# Quick start
+<img src="Docs/demo2_screenshot.png" width="640">
 
 ## Required Tools
 - [Git](https://git-for-windows.github.io/) with Git Bash
@@ -26,12 +24,12 @@ are created, both for Release and Debug:
 ./build.sh -t Debug
 ./build.sh -t Release
 ```
-Executable can now be found under `_bin`.
+Executables can now be found under `_bin`.
 
 ### Using the VS solution
 1. The solution is located in `_build\win\dpasca-sdl2-template.sln`
 2. From *Solution Explorer*, right click on **Demo1** and choose *"Set As StartUp Project"*
-3. Press F7 to build. This will build the project and the required asset conversion tools
+3. Press F7 to build the selected project
 
 ### Updating the VS solution or makefiles
 ```bash
