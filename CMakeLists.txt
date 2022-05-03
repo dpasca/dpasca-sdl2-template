@@ -149,21 +149,9 @@ if (USE_SDL)
     endif()
 endif()
 
-##
-#include_directories( externals/zlib )
-#include_directories( externals/libpng )
-#include_directories( externals/local/libpng )
-#include_directories( externals/libjpeg )
-#include_directories( externals/local/libjpeg_generic )
-
 #==================================================================
 # Specify the destination for the build products
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../../_bin )
-
-# external libs
-#add_subdirectory( externals/local/zlib )
-#add_subdirectory( externals/local/libpng )
-#add_subdirectory( externals/local/libjpeg_generic )
 
 # Various libs
 if (NOT EMSCRIPTEN)
