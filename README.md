@@ -1,8 +1,8 @@
-# Quick start on Windows
+# Quick start
 
 ## Required Tools
 - [Git](https://git-for-windows.github.io/) with Git Bash
-- CMake
+- [CMake](https://cmake.org/download/)
 - For Windows: Visual Studio 2019
 - For Mac: Xcode
 - For Linux: gcc, etc.
