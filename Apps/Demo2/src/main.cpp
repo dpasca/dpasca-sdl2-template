@@ -27,7 +27,7 @@ inline float randNorm()
 // just a lerp
 inline auto dlerp = []( const auto &l, const auto &r, const auto t )
 {
-    return l * (1 - l) + r * t;
+    return l * (1 - t) + r * t;
 };
 
 //==================================================================
