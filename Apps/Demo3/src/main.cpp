@@ -121,6 +121,13 @@ public:
     }
 
     //
+    void AddVertex( const V3F &pos, const V3I &col )
+    {
+        mPoses.push_back( pos );
+        mCols.push_back( col );
+    }
+
+    //
     void AddLine( const V3F &p1, const V3F &p2, const V3I &col )
     {
         const auto len = glm::length( p2 - p1 );
@@ -132,9 +139,8 @@ public:
         for (int i=0; i < n; ++i)
         {
             const auto t = (float)i * oon_1;
-            const auto p = glm::mix( p1, p2, t );
-            mPoses.push_back( p );
-            mCols.push_back( col );
+
+            AddVertex( glm::mix( p1, p2, t ), col );
         }
     }
 
