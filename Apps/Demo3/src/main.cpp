@@ -33,12 +33,6 @@ inline float randUnit()
     return (float)(rand() % 10000) / (10000.f-1);
 };
 
-// just a lerp
-inline auto dlerp = []( const auto &l, const auto &r, const auto t )
-{
-    return l * (1 - t) + r * t;
-};
-
 //==================================================================
 static std::array<V3F,8> makeCubeVerts( const V3F &mi, const V3F &ma )
 {
@@ -72,6 +66,38 @@ inline bool isClippedHomo( const auto &homoPos )
         || homoPos[1] >  homoPos[3]
         || homoPos[2] <  0
         || homoPos[2] >  homoPos[3];
+}
+
+//==================================================================
+inline V3F makeDeviceSpacePoint( const MAT4 &xform, const V3F &srcPoint, float deviceW, float deviceH )
+{
+    // homogeneus coordinates (-w..w)
+    const auto homo = xform * glm::vec4( srcPoint, 1.f );
+
+    // clip in homogeneous space
+    if ( isClippedHomo( homo ) )
+        return {0,0,0};
+
+    // convert to screen-space, meaning that anything visible is
+    // in the range -1..1 for x,y and 0..1 for z
+    const auto oow = 1.f / homo.w;
+    const auto screenX = homo.x * oow;
+    const auto screenY = homo.y * oow;
+    const auto screenZ = homo.z * oow;
+
+    // 0..deviceW (we flip vertically, from 3D standard to computer display standard)
+    const auto deviceX = deviceW * (screenX + 1) * 0.5f;
+    const auto deviceY = deviceH * (1 - screenY) * 0.5f;
+
+    // generate the output vertex in device-space for X and Y and screen-space for Z
+    // notice that Z is only used for sorting, so we could just use Z from homo space
+    return { deviceX, deviceY, screenZ };
+}
+
+//
+inline bool isValidDevicePoint3D( const V3F &vert )
+{
+    return vert.z != 0.f;
 }
 
 //==================================================================
@@ -154,6 +180,7 @@ public:
     {
         const auto n = mPoses.size();
 
+        // structure used to temporarily store the transformed verts to draw
         struct OutVert
         {
             V3F pos;
@@ -163,31 +190,18 @@ public:
         std::vector<OutVert> outVerts;
         outVerts.reserve( n );
 
+        // for each vertex
         for (size_t i=0; i < n; ++i)
         {
-            // homogeneus coordinates (-w..w)
-            const auto homo = proj_obj * glm::vec4( mPoses[i], 1.f );
+            // convert from object-space to device-space (2D display dimensions)
+            const auto devPoint = makeDeviceSpacePoint( proj_obj, mPoses[i], deviceW, deviceH );
 
-            // clip in homogeneous space
-            if ( isClippedHomo( homo ) )
+            // make sure that it can be on display
+            if ( !isValidDevicePoint3D( devPoint ) )
                 continue;
 
-            // convert to screen-space, meaning that anything visible is
-            // in the range -1..1 for x,y and 0..1 for z
-            const auto oow = 1.f / homo.w;
-            const auto screenX = homo.x * oow;
-            const auto screenY = homo.y * oow;
-            const auto screenZ = homo.z * oow;
-
-            // 0..deviceW (we flip vertically, from 3D standard to computer display standard)
-            const auto deviceX = deviceW * (screenX + 1) * 0.5f;
-            const auto deviceY = deviceH * (1 - screenY) * 0.5f;
-
-            // generate the output vertex in device-space for X and Y and screen-space for Z
-            // notice that Z is only used for soeting, so we could just use Z from homo space
-            outVerts.push_back({
-                    V3F{ deviceX, deviceY, screenZ },
-                    mCols[i] });
+            // store the position and color
+            outVerts.push_back({ devPoint, mCols[i] });
         }
 
         // sort with bigger Z first
@@ -196,7 +210,7 @@ public:
             return l.pos.z > r.pos.z;
         });
 
-        // finally render the points
+        // finally render the verts
         for (const auto &v : outVerts)
             DrawAtom( pRend, v.pos.x, v.pos.y, v.col );
     }
@@ -204,6 +218,7 @@ public:
 
 //==================================================================
 static constexpr float CUBE_SIZ         = 1.f;      // 1 meter span
+
 static constexpr float CAMERA_DIST      = 2.f;      // 2 meters away
 static constexpr float CAMERA_FOV_DEG   = 70.f;     // field of view
 static constexpr float CAMERA_NEAR      = 0.01f;    // near plane (1 cm)
@@ -223,7 +238,7 @@ int main( int argc, char *argv[] )
 
     MinimalSDLApp app( "Demo3", W, H );
 
-    AtomObj obj( CUBE_SIZ / 20.f );
+    AtomObj obj( CUBE_SIZ / 30.f );
 
     // begin the main/rendering loop
     for (size_t frameCnt=0; ; ++frameCnt)
