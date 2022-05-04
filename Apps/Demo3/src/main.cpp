@@ -225,7 +225,7 @@ static constexpr float CAMERA_NEAR      = 0.01f;    // near plane (1 cm)
 static constexpr float CAMERA_FAR       = 100.f;    // far plane (100 m)
 
 //==================================================================
-inline float RAD2DEG( float rad )
+inline float DEG2RAD( float rad )
 {
     return glm::pi<float>() / 180.f * rad;
 }
@@ -258,23 +258,31 @@ int main( int argc, char *argv[] )
         obj.ResetObj();
         obj.AddWireCube( CUBE_SIZ, {0,255,0} );
 
-        // calculate the transforms
-        // object -> world transform
-        const auto world_obj = MAT4( 1.f );
+        // --- OBJECT MATRIX ---
+        const auto objAngY = (float)((double)frameCnt / 120.0); // in radiants
+        // start with identity matrix
+        auto world_obj = MAT4( 1.f );
+        // concatenate static rotation around the Z angle (1,0,0)
+        world_obj = glm::rotate( world_obj, DEG2RAD( 7.f ), V3F( 1, 0, 0 ) );
+        // concatenate rotation around the Y angle (0,1,0)
+        world_obj = glm::rotate( world_obj, objAngY, V3F( 0, 1, 0 ) );
 
-        // world -> camera transform
-        const auto camera_world = glm::translate(
-                                        MAT4(1.0f),
-                                        V3F(0.0f, 0.0f, -CAMERA_DIST) );
+        // --- CAMERA MATRIX ---
+        // start with identity matrix
+        auto camera_world = MAT4( 1.f );
+        // concatenate translation on the Z
+        camera_world = glm::translate( camera_world, V3F(0.0f, 0.0f, -CAMERA_DIST) );
 
+        // --- PROJECTION MATRIX ---
         // camera -> projection
         const auto proj_camera = glm::perspective(
-                                        RAD2DEG( CAMERA_FOV_DEG ),
-                                        (float)W / H,
+                                        DEG2RAD( CAMERA_FOV_DEG ),  // FOV
+                                        (float)W / H,               // aspect ratio
                                         CAMERA_NEAR,
                                         CAMERA_FAR );
 
-        // final matrix, transforming obj -> projection
+        // --- FINAL MATRIX ---
+        // transforming obj -> projection
         const auto proj_obj = proj_camera * camera_world * world_obj;
 
         // draw the object
