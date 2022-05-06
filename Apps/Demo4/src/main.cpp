@@ -146,7 +146,7 @@ int main( int argc, char *argv[] )
     constexpr int  W = 640;
     constexpr int  H = 480;
 
-    MinimalSDLApp app( "Demo3", W, H );
+    MinimalSDLApp app( "Demo4", W, H );
 
     // create the object (random points)
     AtomObj obj;
