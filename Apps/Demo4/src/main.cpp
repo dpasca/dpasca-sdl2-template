@@ -135,9 +135,9 @@ static constexpr float CAMERA_NEAR      = 0.01f;    // near plane (1 cm)
 static constexpr float CAMERA_FAR       = 100.f;    // far plane (100 m)
 
 //==================================================================
-inline float DEG2RAD( float rad )
+inline float DEG2RAD( float deg )
 {
-    return glm::pi<float>() / 180.f * rad;
+    return glm::pi<float>() / 180.f * deg;
 }
 
 //==================================================================
