@@ -38,7 +38,7 @@ public:
         // make the 4 verts
         for (size_t i=0; i < 4; ++i)
             makeVtx( i );
-        // make the indices for the triangulation (1 quad = 2 verts)
+        // make the indices for the triangulation (1 quad = 2 triangles = 6 verts)
         constexpr int idxs[6] = {0,1,2, 0,2,3};
         // draw the triangles composing the quad
         SDL_RenderGeometry( pRend, nullptr, sdlVerts, 4, idxs, 6 );
