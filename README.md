@@ -1,6 +1,12 @@
 
 <img src="Docs/demo2_screenshot.png" width="640">
 
+## Demos
+- **Demo1**: A moving red rectangle
+- **Demo2**: A 3D starfield (no *glm* for 3D)
+- **Demo3**: A wire-frame cube made of particles
+- **Demo4**: A cube made with random particles
+
 ## Required Tools
 - [Git](https://git-for-windows.github.io/) with Git Bash
 - [CMake](https://cmake.org/download/)
