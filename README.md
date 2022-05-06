@@ -6,6 +6,7 @@
 - **Demo2**: A 3D starfield (no *glm* for 3D)
 - **Demo3**: A wire-frame cube made of particles
 - **Demo4**: A cube made with random particles
+- **Demo5**: A 2D rotating quad
 
 ## Required Tools
 - [Git](https://git-for-windows.github.io/) with Git Bash

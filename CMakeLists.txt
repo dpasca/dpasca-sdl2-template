@@ -175,4 +175,5 @@ add_subdirectory_if_exists( Apps/Demo1 )
 add_subdirectory_if_exists( Apps/Demo2 )
 add_subdirectory_if_exists( Apps/Demo3 )
 add_subdirectory_if_exists( Apps/Demo4 )
+add_subdirectory_if_exists( Apps/Demo5 )
 
