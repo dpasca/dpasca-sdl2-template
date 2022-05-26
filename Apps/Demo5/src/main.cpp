@@ -51,7 +51,7 @@ int main( int argc, char *argv[] )
     constexpr int  W = 640;
     constexpr int  H = 480;
 
-    MinimalSDLApp app( "Demo5", W, H );
+    MinimalSDLApp app( argc, argv, W, H );
 
     // begin the main/rendering loop
     for (size_t frameCnt=0; ; ++frameCnt)
