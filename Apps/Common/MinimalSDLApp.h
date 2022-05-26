@@ -18,6 +18,8 @@ class MinimalSDLApp
     SDL_Surface     *mpSurface  {};
     SDL_Renderer    *mpRenderer {};
 
+    double          mExitSteadyTimeS  {};
+
 public:
     MinimalSDLApp( int argc, char *argv[], int w, int h );
     ~MinimalSDLApp();
@@ -26,6 +28,9 @@ public:
     void EndFrame();
 
     auto *GetRenderer() { return mpRenderer; }
+
+private:
+    void ctor_parseArgs( int argc, char *argv[] );
 };
 
 
