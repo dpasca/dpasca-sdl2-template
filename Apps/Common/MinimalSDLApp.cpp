@@ -33,8 +33,9 @@ Usage
   %s [options]
 
 Options
-  --help                      : This help
-  --autoexit_delay <secs>     : Automatically exit after a number of seconds
+  --help                       : This help
+  --autoexit_delay <secs>      : Automatically exit after a number of seconds
+  --autoexit_savesshot <fname> : Save a screenshot on automatic exit
 )RAW", argv[0] );
 
         if ( pMsg )
@@ -63,6 +64,10 @@ Options
         else if ( isparam("--autoexit_delay") )
         {
             mExitSteadyTimeS = getSteadyTimeSecs() + std::stod( nextParam() );
+        }
+        else if ( isparam("--autoexit_savesshot") )
+        {
+            mSaveSShotPFName = nextParam();
         }
     }
 }
@@ -144,6 +149,12 @@ bool MinimalSDLApp::BeginFrame()
     if ( mExitSteadyTimeS && getSteadyTimeSecs() > mExitSteadyTimeS )
     {
         printf( "Automatic exit\n" );
+        if ( !mSaveSShotPFName.empty() )
+        {
+            printf( "Saving screenshot %s\n", mSaveSShotPFName.c_str() );
+            SaveScreenshot( mSaveSShotPFName );
+        }
+
         return false;
     }
 
@@ -156,3 +167,15 @@ void MinimalSDLApp::EndFrame()
     SDL_UpdateWindowSurface( mpWindow );
 }
 
+//==================================================================
+void MinimalSDLApp::SaveScreenshot( const std::string &pathFName )
+{
+    const auto fmt = SDL_PIXELFORMAT_RGB888;
+
+    auto *pTmpSurf = SDL_CreateRGBSurfaceWithFormat(
+                            0, mpSurface->w, mpSurface->h, 24, fmt );
+
+    SDL_RenderReadPixels( mpRenderer, nullptr, fmt, pTmpSurf->pixels, pTmpSurf->pitch );
+    SDL_SaveBMP( pTmpSurf, pathFName.c_str() );
+    SDL_FreeSurface( pTmpSurf );
+}

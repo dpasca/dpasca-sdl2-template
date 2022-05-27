@@ -9,6 +9,7 @@
 #ifndef MINIMALSDLAPP_H
 #define MINIMALSDLAPP_H
 
+#include <string>
 #include "SDL.h"
 
 //==================================================================
@@ -19,6 +20,7 @@ class MinimalSDLApp
     SDL_Renderer    *mpRenderer {};
 
     double          mExitSteadyTimeS  {};
+    std::string     mSaveSShotPFName;
 
 public:
     MinimalSDLApp( int argc, char *argv[], int w, int h );
@@ -28,6 +30,8 @@ public:
     void EndFrame();
 
     auto *GetRenderer() { return mpRenderer; }
+
+    void SaveScreenshot( const std::string &pathFName );
 
 private:
     void ctor_parseArgs( int argc, char *argv[] );
