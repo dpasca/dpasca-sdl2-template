@@ -1,5 +1,10 @@
 
-<img src="Docs/demo2_screenshot.png" width="640">
+
+|  |  | |
+|---|---|----|
+| <img src="Docs/demo1_sshot.png" width="500"> | <img src="Docs/demo2_sshot.png" width="500"> |
+| <img src="Docs/demo3_sshot.png" width="500"> | <img src="Docs/demo4_sshot.png" width="500"> |
+| <img src="Docs/demo5_sshot.png" width="500"> | <img src="Docs/demo6_sshot.png" width="500"> |
 
 ## Demos
 - **Demo1**: A moving red rectangle
