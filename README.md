@@ -1,12 +1,10 @@
-
-<img src="Docs/demo2_screenshot.png" width="640">
-
 ## Demos
-- **Demo1**: A moving red rectangle
-- **Demo2**: A 3D starfield (no *glm* for 3D)
-- **Demo3**: A wire-frame cube made of particles
-- **Demo4**: A cube made with random particles
-- **Demo5**: A 2D rotating quad
+
+|  |  |
+|---|---|
+| **Demo1**: A moving red rectangle ![](Docs/demo1_sshot.png) | **Demo2**: A 3D starfield (no *glm* for 3D) ![](Docs/demo2_sshot.png) |
+| **Demo3**: A wire-frame cube made of particles ![](Docs/demo3_sshot.png) | **Demo4**: A cube made with random particles ![](Docs/demo4_sshot.png) |
+| **Demo5**: A 2D rotating quad ![](Docs/demo5_sshot.png) |                                |
 
 ## Required Tools
 - [Git](https://git-for-windows.github.io/) with Git Bash
