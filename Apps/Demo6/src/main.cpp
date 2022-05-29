@@ -17,6 +17,8 @@
 
 #include "MinimalSDLApp.h"
 
+//#define ENABLE_DEBUG_DRAW
+
 // random between 0 and 1
 inline float randUnit()
 {
@@ -86,11 +88,11 @@ inline bool isValidDeviceVert( const Float3 &vert )
 }
 
 //==================================================================
-inline void drawAtom( auto *pRend, float x, float y, const Int3 &col )
+inline void drawAtom( auto *pRend, float x, float y, uint32_t col )
 {
-    SDL_SetRenderDrawColor( pRend, col[0], col[1], col[2], 255 );
-    constexpr int W = 3;
-    constexpr int H = 3;
+    SDL_SetRenderDrawColor( pRend, (col>>16)&0xff,(col>>8)&0xff, (col>>0)&0xff, 255 );
+    constexpr int W = 7;
+    constexpr int H = 7;
     SDL_Rect rc;
     rc.x = (int)(x - W/2.f);
     rc.y = (int)(y - W/2.f);
@@ -171,11 +173,16 @@ inline void voxel_Draw(
                 float deviceH,
                 const Matrix44 &proj_obj )
 {
-    std::vector<Float3> xformedVerts;
+    struct OutVert
+    {
+        Float3      pos;
+        uint32_t    col;
+    };
+    std::vector<OutVert> xformedVerts;
 
     c_auto siz3 = vox.GetVoxSize();
     c_auto bbox = vox.GetVoxBBox();
-    c_auto vsca = (bbox[1] - bbox[0]) / Float3( siz3[0], siz3[1], siz3[2] );
+    c_auto vsca = (bbox[1] - bbox[0]) / Float3( siz3[0]-1, siz3[1]-1, siz3[2]-1 );
     c_auto vtra = bbox[0];
 
     c_auto *pCells = vox.GetVoxCells().data();
@@ -200,7 +207,7 @@ inline void voxel_Draw(
 
                 // store the vertex
                 if ( deviceVert.z > 0 )
-                    xformedVerts.push_back( deviceVert );
+                    xformedVerts.push_back({ deviceVert, val });
             }
         }
     }
@@ -208,17 +215,17 @@ inline void voxel_Draw(
     // sort with bigger Z first
     std::sort( xformedVerts.begin(), xformedVerts.end(), []( const auto &l, const auto &r )
     {
-        return l.z > r.z;
+        return l.pos[2] > r.pos[2];
     });
 
     // finally render the verts
     for (const auto &v : xformedVerts)
-        drawAtom( pRend, v.x, v.y, Int3(255,0,0) );
+        drawAtom( pRend, v.pos[0], v.pos[1], v.col );
 }
 
 //==================================================================
 static constexpr float VOXEL_HDIM       = 0.5f;      // 1 meter span
-static constexpr float VOXEL_CELL_UNIT  = 0.02f;
+static constexpr float VOXEL_CELL_UNIT  = 0.004;
 
 static constexpr float CAMERA_DIST      = 1.5f;     // 1.5 meters away
 static constexpr float CAMERA_FOV_DEG   = 70.f;     // field of view
@@ -241,21 +248,46 @@ static void voxel_Init( auto &vox )
 };
 
 //==================================================================
-static void voxel_Update( auto &vox )
+static void voxel_Update( auto &vox, size_t frameCnt )
 {
-    auto  lerpV = [&]( c_auto t )
+    auto V = [&]( c_auto t )
     {
         return glm::mix( -VOXEL_HDIM,  VOXEL_HDIM, t );
     };
 
     vox.ClearVox( 0 );
 
-    // just a triangle
+    // colored cells at corners
+    {
+        c_auto verts = makeCubeVerts( vox.GetVoxBBox()[0],
+                                      vox.GetVoxBBox()[1] );
+
+        for (c_auto &v : verts)
+            vox.SetCell( v, 0x00ff00 );
+    }
+
+    // a standing triangle
     vox.AddTrig(
-        {lerpV( 0.50f ), lerpV( 0.9f ), lerpV( 0.5f )},
-        {lerpV( 0.10f ), lerpV( 0.1f ), lerpV( 0.5f )},
-        {lerpV( 0.90f ), lerpV( 0.1f ), lerpV( 0.5f )},
-        1 );
+        {V( 0.50f ), V( 0.9f ), V( 0.5f )},
+        {V( 0.10f ), V( 0.1f ), V( 0.5f )},
+        {V( 0.90f ), V( 0.1f ), V( 0.5f )},
+        0xff0000 );
+
+    // white floor
+    vox.AddQuad(
+        {V(0.00f), V(0.f), V(0.00f)}, {V(0.00f), V(0.f), V(1.00f)},
+        {V(1.00f), V(0.f), V(0.00f)}, {V(1.00f), V(0.f), V(1.00f)},
+        0xe0e0e0 );
+
+    // a flat quad bouncing up and down
+    {
+        c_auto y = ((float)sin( (double)frameCnt / 40 ) + 1) / 2;
+
+        vox.AddQuad(
+            {V(0.10f), V(y), V(0.10f)}, {V(0.10f), V(y), V(0.90f)},
+            {V(0.90f), V(y), V(0.10f)}, {V(0.90f), V(y), V(0.90f)},
+            0x0010ff );
+    }
 };
 
 //==================================================================
@@ -286,7 +318,7 @@ int main( int argc, char *argv[] )
         SDL_RenderClear( pRend );
 
         // --- OBJECT MATRIX ---
-        const auto objAngY = (float)((double)frameCnt / 120.0); // in radiants
+        const auto objAngY = (float)((double)frameCnt / 200.0); // in radiants
         // start with identity matrix
         auto world_obj = Matrix44( 1.f );
         // concatenate static rotation around the Z angle (1,0,0)
@@ -313,10 +345,10 @@ int main( int argc, char *argv[] )
         const auto proj_obj = proj_camera * camera_world * world_obj;
 
         // draw the outline
-        voxel_Update( vox );
-
+        voxel_Update( vox, frameCnt );
+#ifdef ENABLE_DEBUG_DRAW
         voxel_DebugDraw( pRend, vox, W, H, proj_obj );
-
+#endif
         // draw the voxel
         voxel_Draw( pRend, vox, W, H, proj_obj );
 

@@ -8,15 +8,6 @@
 
 #include "Voxel.h"
 
-//#define TEST_WORK
-
-#if defined(TEST_WORK)
-# include <assert>
-# define VOXASSERT       assert
-#else
-# define VOXASSERT(_X_)
-#endif
-
 //==================================================================
 inline auto lengthSqr = []( c_auto &v ) { return glm::dot( v, v ); };
 
@@ -118,13 +109,13 @@ void Voxel::SetBBoxAndUnit( const BBoxT &bbox, float baseUnit, VLenT maxDimL2 )
     mCells.clear();
     mCells.resize( (size_t)1 << (mN0 + mN1 + mN2) );
 
-    mUnit[0] = bboxSiz[0] / nn0;
-    mUnit[1] = bboxSiz[1] / nn1;
-    mUnit[2] = bboxSiz[2] / nn2;
+    mUnit[0] = nn0 > 1 ? (bboxSiz[0] / (nn0-1)) : 0.f;
+    mUnit[1] = nn1 > 1 ? (bboxSiz[1] / (nn1-1)) : 0.f;
+    mUnit[2] = nn2 > 1 ? (bboxSiz[2] / (nn2-1)) : 0.f;
 
-    mVS_LS[0] = nn0 / (bboxSiz[0] ? bboxSiz[0] : 1);
-    mVS_LS[1] = nn1 / (bboxSiz[1] ? bboxSiz[1] : 1);
-    mVS_LS[2] = nn2 / (bboxSiz[2] ? bboxSiz[2] : 1);
+    mVS_LS[0] = (nn0 - 1) / (bboxSiz[0] ? bboxSiz[0] : 1);
+    mVS_LS[1] = (nn1 - 1) / (bboxSiz[1] ? bboxSiz[1] : 1);
+    mVS_LS[2] = (nn2 - 1) / (bboxSiz[2] ? bboxSiz[2] : 1);
 
     // avoid picking a 0 potential 2D gementry aligned to some axis
     auto minUnit = FLT_MAX;
@@ -135,7 +126,7 @@ void Voxel::SetBBoxAndUnit( const BBoxT &bbox, float baseUnit, VLenT maxDimL2 )
 
     VOXASSERT( minUnit > EPS && minUnit != FLT_MAX );
 
-    mOOUnitForTess = minUnit ? (1.f / minUnit * 1.00f) : 1.f;
+    mOOUnitForTess = minUnit ? (1.f / minUnit * 0.10f) : 1.f;
 }
 
 //==================================================================
@@ -167,30 +158,7 @@ void Voxel::AddTrigs(
 }
 
 //==================================================================
-inline void Voxel::buildAddElem( const Float3 &pos, CellType val )
-{
-    VOXASSERT(
-        (pos[0] >= mBBox[0][0] && pos[0] <= mBBox[1][0]) &&
-        (pos[1] >= mBBox[0][1] && pos[1] <= mBBox[1][1]) &&
-        (pos[2] >= mBBox[0][2] && pos[2] <= mBBox[1][2]) );
-
-    c_auto cellIdxF = (pos - mBBox[0]) * mVS_LS;
-
-    c_auto cell0 = (int)cellIdxF[0];
-    c_auto cell1 = (int)cellIdxF[1];
-    c_auto cell2 = (int)cellIdxF[2];
-
-    if ( cell0 < 0 || cell0 >= (1 << mN0) ) return;
-    if ( cell1 < 0 || cell1 >= (1 << mN1) ) return;
-    if ( cell2 < 0 || cell2 >= (1 << mN2) ) return;
-
-    mCells[ ((size_t)cell2 << (mN1 + mN0)) +
-            ((size_t)cell1 <<        mN0 ) +
-            ((size_t)cell0               )  ] = val;
-}
-
-//==================================================================
-void Voxel::buildTessQuad(
+void Voxel::AddQuad(
         const Float3 &p00,
         const Float3 &p01,
         const Float3 &p10,
@@ -219,13 +187,11 @@ void Voxel::buildTessQuad(
     c_auto nvf = ceilf( maxv * mOOUnitForTess );
     //VOXASSERT( nhf != 0 && nvf != 0 );
 
-    // NOTE: this 0.5 is a bit hacky, it works for how it's used
-    //  to split a triangle
-    if ( nhf < 0.5f || nvf < 0.5f )
+    if ( nhf < 1 || nvf < 1 )
         return;
 
-    c_auto oonhf = 1.f / (nhf - 0.5f);
-    c_auto oonvf = 1.f / (nvf - 0.5f);
+    c_auto oonhf = 1.f / (nhf - 1);
+    c_auto oonvf = 1.f / (nvf - 1);
 
     c_auto ddv0 = dv0 * oonvf;
     c_auto ddv1 = dv1 * oonvf;
@@ -241,7 +207,7 @@ void Voxel::buildTessQuad(
           auto ph = pv0;
         for (VLenT j=0; j < nh; ++j, ph += ddh)
         {
-            buildAddElem( ph, val );
+            SetCell( ph, val );
         }
     }
 }
@@ -258,9 +224,9 @@ void Voxel::buildTessTri(
     c_auto b   = (v1 + v2) * 0.5f;
     c_auto c   = (v0 + v2) * 0.5f;
 
-    buildTessQuad( v0, a, c, mid, val );
-    buildTessQuad( v1, a, b, mid, val );
-    buildTessQuad( v2, b, c, mid, val );
+    AddQuad( v0, a, c, mid, val );
+    AddQuad( v1, a, b, mid, val );
+    AddQuad( v2, b, c, mid, val );
 }
 
 //==================================================================
@@ -346,7 +312,7 @@ const VVec<const Voxel::CellType *> &Voxel::CheckLine(
     VLenT ia, ta;
     VLenT ib, tb;
     VLenT ic, tc;
-#if defined(TEST_WORK)
+#if defined(VOX_TEST_WORK)
     VLenT nna, nnb, nnc;
 #endif
 
@@ -360,7 +326,7 @@ const VVec<const Voxel::CellType *> &Voxel::CheckLine(
             ia = 0; ta = 0;
             ib = 1; tb = mN0;
             ic = 2; tc = mN0 + mN1;
-#if defined(TEST_WORK)
+#if defined(VOX_TEST_WORK)
             nna = 1 << mN0;
             nnb = 1 << mN1;
             nnc = 1 << mN2;
@@ -369,7 +335,7 @@ const VVec<const Voxel::CellType *> &Voxel::CheckLine(
             ia = 2; ta = mN0 + mN1;
             ib = 0; tb = 0;
             ic = 1; tc = mN0;
-#if defined(TEST_WORK)
+#if defined(VOX_TEST_WORK)
             nna = 1 << mN2;
             nnb = 1 << mN0;
             nnc = 1 << mN1;
@@ -382,7 +348,7 @@ const VVec<const Voxel::CellType *> &Voxel::CheckLine(
             ia = 1; ta = mN0;
             ib = 2; tb = mN0 + mN1;
             ic = 0; tc = 0;
-#if defined(TEST_WORK)
+#if defined(VOX_TEST_WORK)
             nna = 1 << mN1;
             nnb = 1 << mN2;
             nnc = 1 << mN0;
@@ -391,7 +357,7 @@ const VVec<const Voxel::CellType *> &Voxel::CheckLine(
             ia = 2; ta = mN0 + mN1;
             ib = 0; tb = 0;
             ic = 1; tc = mN0;
-#if defined(TEST_WORK)
+#if defined(VOX_TEST_WORK)
             nna = 1 << mN2;
             nnb = 1 << mN0;
             nnc = 1 << mN1;
@@ -423,7 +389,7 @@ const VVec<const Voxel::CellType *> &Voxel::CheckLine(
     auto c = vox[0][ic];// + fa * dc;
     for (VLenT a=a0; a <= a1; a += 1, b += db, c += dc)
     {
-#if defined(TEST_WORK)
+#if defined(VOX_TEST_WORK)
         VOXASSERT( (VLenT)a < nna && (VLenT)b < nnb && (VLenT)c < nnc );
 #endif
         c_auto a_idx = (size_t)a << ta;
