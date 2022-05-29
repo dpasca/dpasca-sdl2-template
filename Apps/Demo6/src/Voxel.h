@@ -44,6 +44,8 @@ private:
 public:
     void SetBBoxAndUnit( const BBoxT &bbox, float baseUnit, VLenT maxDimL2 );
 
+    void ClearVox( CellType val );
+
     void AddTrigs(
             const Float3 *pPos,
             const size_t posN,

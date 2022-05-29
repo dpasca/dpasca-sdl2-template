@@ -135,7 +135,13 @@ void Voxel::SetBBoxAndUnit( const BBoxT &bbox, float baseUnit, VLenT maxDimL2 )
 
     VOXASSERT( minUnit > EPS && minUnit != FLT_MAX );
 
-    mOOUnitForTess = minUnit ? (1.f / minUnit * 0.25f) : 1.f;
+    mOOUnitForTess = minUnit ? (1.f / minUnit * 1.00f) : 1.f;
+}
+
+//==================================================================
+void Voxel::ClearVox( CellType val )
+{
+    std::fill( mCells.begin(), mCells.end(), val );
 }
 
 //==================================================================
@@ -211,10 +217,15 @@ void Voxel::buildTessQuad(
 
     c_auto nhf = ceilf( maxh * mOOUnitForTess );
     c_auto nvf = ceilf( maxv * mOOUnitForTess );
-    VOXASSERT( nhf != 0 && nvf != 0 );
+    //VOXASSERT( nhf != 0 && nvf != 0 );
 
-    c_auto oonhf = 1.f / nhf;
-    c_auto oonvf = 1.f / nvf;
+    // NOTE: this 0.5 is a bit hacky, it works for how it's used
+    //  to split a triangle
+    if ( nhf < 0.5f || nvf < 0.5f )
+        return;
+
+    c_auto oonhf = 1.f / (nhf - 0.5f);
+    c_auto oonvf = 1.f / (nvf - 0.5f);
 
     c_auto ddv0 = dv0 * oonvf;
     c_auto ddv1 = dv1 * oonvf;

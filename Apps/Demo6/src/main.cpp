@@ -89,8 +89,8 @@ inline bool isValidDeviceVert( const Float3 &vert )
 inline void drawAtom( auto *pRend, float x, float y, const Int3 &col )
 {
     SDL_SetRenderDrawColor( pRend, col[0], col[1], col[2], 255 );
-    constexpr int W = 2;
-    constexpr int H = 2;
+    constexpr int W = 3;
+    constexpr int H = 3;
     SDL_Rect rc;
     rc.x = (int)(x - W/2.f);
     rc.y = (int)(y - W/2.f);
@@ -125,7 +125,7 @@ static std::array<T,8> makeCubeVerts( const T &mi, const T &ma )
 }
 
 //==================================================================
-inline void drawVoxelOutline(
+inline void voxel_DebugDraw(
                 auto *pRend,
                 const Voxel &vox,
                 float deviceW,
@@ -146,7 +146,7 @@ inline void drawVoxelOutline(
             SDL_RenderDrawLine( pRend, (int)v1[0], (int)v1[1], (int)v2[0], (int)v2[1] );
     };
 
-    SDL_SetRenderDrawColor( pRend, 0, 255, 0, SDL_ALPHA_OPAQUE );
+    SDL_SetRenderDrawColor( pRend, 0, 255, 0, 90 );
 
     // bottom and top
     for (int h=0; h <= 2; h += 2)
@@ -164,7 +164,7 @@ inline void drawVoxelOutline(
 }
 
 //==================================================================
-inline void drawVoxel(
+inline void voxel_Draw(
                 auto *pRend,
                 const Voxel &vox,
                 float deviceW,
@@ -218,7 +218,7 @@ inline void drawVoxel(
 
 //==================================================================
 static constexpr float VOXEL_HDIM       = 0.5f;      // 1 meter span
-static constexpr float VOXEL_CELL_UNIT  = 0.01f;
+static constexpr float VOXEL_CELL_UNIT  = 0.02f;
 
 static constexpr float CAMERA_DIST      = 1.5f;     // 1.5 meters away
 static constexpr float CAMERA_FOV_DEG   = 70.f;     // field of view
@@ -232,6 +232,33 @@ inline float DEG2RAD( float deg )
 }
 
 //==================================================================
+static void voxel_Init( auto &vox )
+{
+    vox.SetBBoxAndUnit( BBoxT{{ {-VOXEL_HDIM, -VOXEL_HDIM, -VOXEL_HDIM},
+                                { VOXEL_HDIM,  VOXEL_HDIM,  VOXEL_HDIM}}},
+                        VOXEL_CELL_UNIT,
+                        10 );
+};
+
+//==================================================================
+static void voxel_Update( auto &vox )
+{
+    auto  lerpV = [&]( c_auto t )
+    {
+        return glm::mix( -VOXEL_HDIM,  VOXEL_HDIM, t );
+    };
+
+    vox.ClearVox( 0 );
+
+    // just a triangle
+    vox.AddTrig(
+        {lerpV( 0.50f ), lerpV( 0.9f ), lerpV( 0.5f )},
+        {lerpV( 0.10f ), lerpV( 0.1f ), lerpV( 0.5f )},
+        {lerpV( 0.90f ), lerpV( 0.1f ), lerpV( 0.5f )},
+        1 );
+};
+
+//==================================================================
 int main( int argc, char *argv[] )
 {
     constexpr int  W = 640;
@@ -241,24 +268,8 @@ int main( int argc, char *argv[] )
 
     // create the voxel
     Voxel vox;
-    {
-        vox.SetBBoxAndUnit( BBoxT{{ {-VOXEL_HDIM, -VOXEL_HDIM, -VOXEL_HDIM},
-                                    { VOXEL_HDIM,  VOXEL_HDIM,  VOXEL_HDIM}}},
-                            VOXEL_CELL_UNIT,
-                            10 );
 
-        auto  lerpV = [&]( c_auto t )
-        {
-            return glm::mix( -VOXEL_HDIM,  VOXEL_HDIM, t );
-        };
-
-        // just a triangle
-        vox.AddTrig(
-            {lerpV( 0.50f ), lerpV( 0.9f ), lerpV( 0.5f )},
-            {lerpV( 0.10f ), lerpV( 0.1f ), lerpV( 0.5f )},
-            {lerpV( 0.90f ), lerpV( 0.1f ), lerpV( 0.5f )},
-            1 );
-    }
+    voxel_Init( vox );
 
     // begin the main/rendering loop
     for (size_t frameCnt=0; ; ++frameCnt)
@@ -301,10 +312,13 @@ int main( int argc, char *argv[] )
         // transforming obj -> projection
         const auto proj_obj = proj_camera * camera_world * world_obj;
 
-        // draw the object
-        drawVoxel( pRend, vox, W, H, proj_obj );
+        // draw the outline
+        voxel_Update( vox );
 
-        drawVoxelOutline( pRend, vox, W, H, proj_obj );
+        voxel_DebugDraw( pRend, vox, W, H, proj_obj );
+
+        // draw the voxel
+        voxel_Draw( pRend, vox, W, H, proj_obj );
 
         // end of the frame (will present)
         app.EndFrame();
