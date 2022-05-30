@@ -76,16 +76,15 @@ public:
             const Float3 &p11,
             CellType val );
 
-    void LineScan(
-            const Float3 &lineSta,
-            const Float3 &lineEnd,
-            const std::function<void (size_t)> &onLenFn,
-            const std::function<void (size_t, auto&)> &onCellFn );
-
     void CheckLine(
                     const Float3 &lineSta,
                     const Float3 &lineEnd,
                     VVec<const CellType*> &out_checkRes ) const;
+
+    void DrawLine(
+                    const Float3 &lineSta,
+                    const Float3 &lineEnd,
+                    const CellType &srcVal );
 
     bool FindClosestNonEmptyCellCtr(
                         const Float3 &posLS,

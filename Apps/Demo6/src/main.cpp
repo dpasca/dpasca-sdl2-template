@@ -288,6 +288,31 @@ static void voxel_Update( auto &vox, size_t frameCnt )
             {V(0.90f), V(y), V(0.10f)}, {V(0.90f), V(y), V(0.90f)},
             0x0010ff );
     }
+
+    // draw frame
+    {
+        c_auto verts = makeCubeVerts( vox.GetVoxBBox()[0],
+                                      vox.GetVoxBBox()[1] );
+
+        auto drawLine = [&]( auto i, auto j )
+        {
+            vox.DrawLine( verts[i], verts[j], 0x00ff00 );
+        };
+
+        // bottom and top
+        for (int h=0; h <= 2; h += 2)
+        {
+            drawLine( 0 + h, 1 + h );
+            drawLine( 1 + h, 5 + h );
+            drawLine( 5 + h, 4 + h );
+            drawLine( 4 + h, 0 + h );
+        }
+        // pillars
+        drawLine( 0, 0 + 2 );
+        drawLine( 1, 1 + 2 );
+        drawLine( 5, 5 + 2 );
+        drawLine( 4, 4 + 2 );
+    }
 };
 
 //==================================================================

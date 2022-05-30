@@ -425,6 +425,20 @@ void Voxel::CheckLine(
         lineSta,
         lineEnd,
         [&]( c_auto len )             { out_checkRes.resize( len ); },
-        [&]( c_auto idx, c_auto &val ){ out_checkRes[ idx ] = &val; } );
+        [&]( c_auto idx, c_auto &desVal ){ out_checkRes[ idx ] = &desVal; } );
+}
+
+//==================================================================
+void Voxel::DrawLine(
+                    const Float3 &lineSta,
+                    const Float3 &lineEnd,
+                    const CellType &srcVal )
+{
+    voxLineScan(
+        *this,
+        lineSta,
+        lineEnd,
+        [&]( c_auto ) {},
+        [&]( c_auto idx, auto &desVal ){ desVal = srcVal; } );
 }
 
