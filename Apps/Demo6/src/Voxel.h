@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <array>
 #include <vector>
+#include <functional>
 #include "MathBase.h"
 
 //#define VOX_TEST_WORK
@@ -34,9 +35,6 @@ public:
     using CellType = uint32_t;
 
     std::vector<CellType>  mCells;
-
-private:
-    mutable VVec<const CellType*>   mCheckRes;
 
 public:
     BBoxT       mBBox  {};
@@ -78,9 +76,16 @@ public:
             const Float3 &p11,
             CellType val );
 
-    const VVec<const CellType *> &CheckLine(
-                            const Float3 &lineSta,
-                            const Float3 &lineEnd ) const;
+    void LineScan(
+            const Float3 &lineSta,
+            const Float3 &lineEnd,
+            const std::function<void (size_t)> &onLenFn,
+            const std::function<void (size_t, auto&)> &onCellFn );
+
+    void CheckLine(
+                    const Float3 &lineSta,
+                    const Float3 &lineEnd,
+                    VVec<const CellType*> &out_checkRes ) const;
 
     bool FindClosestNonEmptyCellCtr(
                         const Float3 &posLS,
@@ -91,7 +96,15 @@ public:
         return { (size_t)1 << mN0, (size_t)1 << mN1, (size_t)1 << mN2 };
     }
     const auto &GetVoxBBox() const { return mBBox; }
+
+    const auto &GetVS_LS() const { return mVS_LS; }
+
     const auto &GetVoxCells() const { return mCells; }
+          auto &GetVoxCells()       { return mCells; }
+
+    auto GetVoxN0() const { return mN0; }
+    auto GetVoxN1() const { return mN1; }
+    auto GetVoxN2() const { return mN2; }
 
 private:
     void buildTessTri(
@@ -99,8 +112,6 @@ private:
             const Float3 &v1,
             const Float3 &v2,
             CellType val );
-
-    bool clipLine( Float3 verts[2] ) const;
 };
 
 //==================================================================

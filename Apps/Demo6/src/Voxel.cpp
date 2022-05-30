@@ -285,30 +285,37 @@ bool Voxel::FindClosestNonEmptyCellCtr(
 }
 
 //==================================================================
-const VVec<const Voxel::CellType *> &Voxel::CheckLine(
-                                            const Float3 &lineSta,
-                                            const Float3 &lineEnd ) const
+inline auto voxLineScan = [](
+            auto &vox,
+            const Float3 &lineSta,
+            const Float3 &lineEnd,
+            const auto &onLenFn,
+            const auto &onCellFn )
 {
-    mCheckRes.clear();
+    c_auto &bbox = vox.GetVoxBBox();
+
+    c_auto n0 = vox.GetVoxN0();
+    c_auto n1 = vox.GetVoxN1();
+    c_auto n2 = vox.GetVoxN2();
 
     // clip local-space line
     std::array<Float3,2> clipped { lineSta, lineEnd };
-    if NOT( clipLineBBox( clipped, &mBBox[0] ) )
-        return mCheckRes; // just get out
+    if NOT( clipLineBBox( clipped, &bbox[0] ) )
+        return; // just get out
 
     // voxel-space line
-    Float3 vox[] = {
-            (clipped[0] - mBBox[0]) * mVS_LS,
-            (clipped[1] - mBBox[0]) * mVS_LS
+    Float3 lineVS[] = {
+            (clipped[0] - bbox[0]) * vox.GetVS_LS(),
+            (clipped[1] - bbox[0]) * vox.GetVS_LS()
     };
 
-    c_auto maxVec = Float3( (float)((1 << mN0)-1),
-                            (float)((1 << mN1)-1),
-                            (float)((1 << mN2)-1) );
-    vox[0] = glm::clamp( vox[0], Float3{0,0,0}, maxVec );
-    vox[1] = glm::clamp( vox[1], Float3{0,0,0}, maxVec );
+    c_auto maxVec = Float3( (float)((1 << n0)-1),
+                            (float)((1 << n1)-1),
+                            (float)((1 << n2)-1) );
+    lineVS[0] = glm::clamp( lineVS[0], Float3{0,0,0}, maxVec );
+    lineVS[1] = glm::clamp( lineVS[1], Float3{0,0,0}, maxVec );
 
-    auto diff = vox[1] - vox[0];
+    auto diff = lineVS[1] - lineVS[0];
 
     VLenT ia, ta;
     VLenT ib, tb;
@@ -325,69 +332,73 @@ const VVec<const Voxel::CellType *> &Voxel::CheckLine(
     {
         if ( adiff0 > adiff2 ) {
             ia = 0; ta = 0;
-            ib = 1; tb = mN0;
-            ic = 2; tc = mN0 + mN1;
+            ib = 1; tb = n0;
+            ic = 2; tc = n0 + n1;
 #if defined(VOX_TEST_WORK)
-            nna = 1 << mN0;
-            nnb = 1 << mN1;
-            nnc = 1 << mN2;
+            nna = 1 << n0;
+            nnb = 1 << n1;
+            nnc = 1 << n2;
 #endif
         } else {
-            ia = 2; ta = mN0 + mN1;
+            ia = 2; ta = n0 + n1;
             ib = 0; tb = 0;
-            ic = 1; tc = mN0;
+            ic = 1; tc = n0;
 #if defined(VOX_TEST_WORK)
-            nna = 1 << mN2;
-            nnb = 1 << mN0;
-            nnc = 1 << mN1;
+            nna = 1 << n2;
+            nnb = 1 << n0;
+            nnc = 1 << n1;
 #endif
         }
     }
     else
     {
         if ( adiff1 > adiff2 ) {
-            ia = 1; ta = mN0;
-            ib = 2; tb = mN0 + mN1;
+            ia = 1; ta = n0;
+            ib = 2; tb = n0 + n1;
             ic = 0; tc = 0;
 #if defined(VOX_TEST_WORK)
-            nna = 1 << mN1;
-            nnb = 1 << mN2;
-            nnc = 1 << mN0;
+            nna = 1 << n1;
+            nnb = 1 << n2;
+            nnc = 1 << n0;
 #endif
         } else {
-            ia = 2; ta = mN0 + mN1;
+            ia = 2; ta = n0 + n1;
             ib = 0; tb = 0;
-            ic = 1; tc = mN0;
+            ic = 1; tc = n0;
 #if defined(VOX_TEST_WORK)
-            nna = 1 << mN2;
-            nnb = 1 << mN0;
-            nnc = 1 << mN1;
+            nna = 1 << n2;
+            nnb = 1 << n0;
+            nnc = 1 << n1;
 #endif
         }
     }
 
-    if ( vox[0][ia] > vox[1][ia] )
+    if ( lineVS[0][ia] > lineVS[1][ia] )
     {
-        std::swap( vox[0], vox[1] );
+        std::swap( lineVS[0], lineVS[1] );
         diff = -diff;
     }
 
-    c_auto a0 = (VLenT)vox[0][ia];
-    c_auto a1 = (VLenT)vox[1][ia];
+    c_auto a0 = (VLenT)lineVS[0][ia];
+    c_auto a1 = (VLenT)lineVS[1][ia];
 
-    //float fa = vox[0][ia] - (float)a0;
+    //float fa = lineVS[0][ia] - (float)a0;
 
     c_auto lena = a1 - a0 + 1;
 
-    mCheckRes.resize( lena );
+    onLenFn( lena );
 
     c_auto oolena = 1.f / (float)lena;
 
     c_auto db = diff[ib] * oolena;
     c_auto dc = diff[ic] * oolena;
 
-    auto b = vox[0][ib];// + fa * db;
-    auto c = vox[0][ic];// + fa * dc;
+    auto b = lineVS[0][ib];// + fa * db;
+    auto c = lineVS[0][ic];// + fa * dc;
+
+
+    auto &cells = vox.GetVoxCells();
+
     for (VLenT a=a0; a <= a1; a += 1, b += db, c += dc)
     {
 #if defined(VOX_TEST_WORK)
@@ -396,9 +407,24 @@ const VVec<const Voxel::CellType *> &Voxel::CheckLine(
         c_auto a_idx = (size_t)a << ta;
         c_auto b_idx = (size_t)b << tb;
         c_auto c_idx = (size_t)c << tc;
-        mCheckRes[a-a0] = &mCells[ a_idx + b_idx + c_idx ];
-    }
 
-    return mCheckRes;
+        onCellFn( a-a0, cells[ a_idx + b_idx + c_idx ] );
+    }
+};
+
+//==================================================================
+void Voxel::CheckLine(
+                    const Float3 &lineSta,
+                    const Float3 &lineEnd,
+                    VVec<const CellType*> &out_checkRes ) const
+{
+    out_checkRes.clear();
+
+    voxLineScan(
+        *this,
+        lineSta,
+        lineEnd,
+        [&]( c_auto len )             { out_checkRes.resize( len ); },
+        [&]( c_auto idx, c_auto &val ){ out_checkRes[ idx ] = &val; } );
 }
 
