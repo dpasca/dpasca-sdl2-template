@@ -27,7 +27,7 @@ run_demo "2" 2
 run_demo "3" 2
 run_demo "4" 2
 run_demo "5" 2
-run_demo "6" 4
+run_demo "6" 3.5
 
 mogrify -format png *.bmp
 

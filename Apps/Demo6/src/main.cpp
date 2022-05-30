@@ -18,18 +18,7 @@
 #include "MinimalSDLApp.h"
 
 //#define ENABLE_DEBUG_DRAW
-
-// random between 0 and 1
-inline float randUnit()
-{
-    return (float)(rand() % 10000) / (10000.f-1);
-};
-
-// random between -1 and 1
-inline float randNorm()
-{
-    return randUnit() * 2 - 1;
-};
+#define DO_SPIN_TRIANGLE
 
 //==================================================================
 #if 0
@@ -250,9 +239,14 @@ static void voxel_Init( auto &vox )
 //==================================================================
 static void voxel_Update( auto &vox, size_t frameCnt )
 {
-    auto V = [&]( c_auto t )
+    // make a vertex in voxel-space (0,0,0 -> box_min, 1,1,1 -> box_max)
+    auto V = [&]( c_auto s, c_auto t, c_auto q )
     {
-        return glm::mix( -VOXEL_HDIM,  VOXEL_HDIM, t );
+        c_auto voxX = glm::mix( -VOXEL_HDIM,  VOXEL_HDIM, s );
+        c_auto voxY = glm::mix( -VOXEL_HDIM,  VOXEL_HDIM, t );
+        c_auto voxZ = glm::mix( -VOXEL_HDIM,  VOXEL_HDIM, q );
+
+        return Float3( voxX, voxY, voxZ );
     };
 
     vox.ClearVox( 0 );
@@ -267,16 +261,40 @@ static void voxel_Update( auto &vox, size_t frameCnt )
     }
 
     // a standing triangle
+#ifdef DO_SPIN_TRIANGLE
+    {
+        const auto objAngX = (float)((double)frameCnt / 200.0); // in radiants
+        const auto objAngY = (float)((double)frameCnt / 60.0); // in radiants
+
+        // make the transformation for the triangle
+        auto world_obj = Matrix44( 1.f );
+        world_obj = glm::rotate( world_obj, objAngY, Float3( 0, 1, 0 ) );
+        world_obj = glm::rotate( world_obj, objAngX, Float3( 1, 0, 0 ) );
+
+        // make a triangle vert in world/voxel space
+        auto xformV = [&]( c_auto s, c_auto t, c_auto q )
+        {
+            return Float3( world_obj * glm::vec4( V( s, t, q ), 1.f ) );
+        };
+
+        vox.AddTrig(
+            xformV( 0.50f, 0.9f, 0.5f ),
+            xformV( 0.10f, 0.1f, 0.5f ),
+            xformV( 0.90f, 0.1f, 0.5f ),
+            0xff0000 );
+    }
+#else
     vox.AddTrig(
-        {V( 0.50f ), V( 0.9f ), V( 0.5f )},
-        {V( 0.10f ), V( 0.1f ), V( 0.5f )},
-        {V( 0.90f ), V( 0.1f ), V( 0.5f )},
+        V( 0.50f, 0.9f, 0.5f ),
+        V( 0.10f, 0.1f, 0.5f ),
+        V( 0.90f, 0.1f, 0.5f ),
         0xff0000 );
+#endif
 
     // white floor
     vox.AddQuad(
-        {V(0.00f), V(0.f), V(0.00f)}, {V(0.00f), V(0.f), V(1.00f)},
-        {V(1.00f), V(0.f), V(0.00f)}, {V(1.00f), V(0.f), V(1.00f)},
+        V(0.00f, 0.f, 0.00f), V(0.00f, 0.f, 1.00f),
+        V(1.00f, 0.f, 0.00f), V(1.00f, 0.f, 1.00f),
         0xe0e0e0 );
 
     // a flat quad bouncing up and down
@@ -284,8 +302,8 @@ static void voxel_Update( auto &vox, size_t frameCnt )
         c_auto y = ((float)sin( (double)frameCnt / 40 ) + 1) / 2;
 
         vox.AddQuad(
-            {V(0.10f), V(y), V(0.10f)}, {V(0.10f), V(y), V(0.90f)},
-            {V(0.90f), V(y), V(0.10f)}, {V(0.90f), V(y), V(0.90f)},
+            V(0.10f, y, 0.10f), V(0.10f, y, 0.90f),
+            V(0.90f, y, 0.10f), V(0.90f, y, 0.90f),
             0x0010ff );
     }
 
