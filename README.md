@@ -10,7 +10,7 @@
 - [Git](https://git-for-windows.github.io/) with Git Bash
 - [CMake](https://cmake.org/download/)
 - For Windows: Visual Studio
-- For Mac: Xcode
+- For Mac: Xcode (untested)
 - For Linux: gcc, etc.
 
 If you're on Windows. All commands are meant to run under Git Bash, not MS-DOS.

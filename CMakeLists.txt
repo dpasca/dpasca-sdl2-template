@@ -112,9 +112,9 @@ if (USE_SDL)
         set(SDL_STATIC FALSE )
         add_subdirectory( externals/SDL2 )
 
-        set(SDL_ROOT_DIR ${CMAKE_BINARY_DIR}/externals/SDL2)
-
         if (WIN32)
+            set(SDL_ROOT_DIR ${CMAKE_BINARY_DIR}/externals/SDL2)
+
             set(SDL_LIBRARY_DIRS ${SDL_ROOT_DIR}/Release ${SDL_ROOT_DIR}/Debug )
 
             set(SDL_LIBRARIES
@@ -128,6 +128,8 @@ if (USE_SDL)
             set(SDL_LIBRARIES_EXTRA
                 user32;gdi32;winmm;imm32;ole32;oleaut32;version;uuid;advapi32;setupapi;shell32;dinput8 )
         elseif (UNIX)
+            set(SDL_ROOT_DIR ${CMAKE_BINARY_DIR}/externals/SDL2)
+
             set(SDL_LIBRARY_DIRS ${SDL_ROOT_DIR})
 
             set(SDL_LIBRARIES

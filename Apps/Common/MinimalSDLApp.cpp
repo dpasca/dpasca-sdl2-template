@@ -7,6 +7,7 @@
 //==================================================================
 
 #include <string>
+#include <strings.h> // for strcasecmp()
 #include <chrono>
 #include <filesystem>
 #include "MinimalSDLApp.h"
