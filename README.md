@@ -9,7 +9,7 @@
 ## Required Tools
 - [Git](https://git-for-windows.github.io/) with Git Bash
 - [CMake](https://cmake.org/download/)
-- For Windows: Visual Studio 2019
+- For Windows: Visual Studio
 - For Mac: Xcode
 - For Linux: gcc, etc.
 
@@ -37,6 +37,7 @@ Executables can now be found under `_bin`.
 3. Press F7 to build the selected project
 
 ### Updating the VS solution or makefiles
+This will refresh the makefiles or IDE projects for when sources are added or removed.
 ```bash
 ./build.sh -d
 ```
