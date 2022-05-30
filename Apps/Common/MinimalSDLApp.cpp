@@ -7,7 +7,6 @@
 //==================================================================
 
 #include <string>
-#include <strings.h> // for strcasecmp()
 #include <chrono>
 #include <filesystem>
 #include "MinimalSDLApp.h"
@@ -22,6 +21,8 @@ inline double getSteadyTimeSecs()
 
 #ifdef _MSC_VER
 inline int strcasecmp( const char *a, const char *b ) { return _stricmp( a, b ); }
+#else
+# include <strings.h> // for strcasecmp()
 #endif
 
 //==================================================================
