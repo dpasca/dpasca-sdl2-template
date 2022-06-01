@@ -370,7 +370,7 @@ int main( int argc, char *argv[] )
         auto world_obj = Matrix44( 1.f );
 #ifdef ANIM_OBJ_POS
         // move the object on the Z
-        c_auto objZ = glm::mix( -0.3f, 1.0f, ((sin( frameCnt / 250.0 )+1)/2) );
+        c_auto objZ = glm::mix( -0.3f, 0.5f, ((sin( frameCnt / 250.0 )+1)/2) );
         world_obj = glm::translate( world_obj, Float3(0.0f, 0.0f, objZ) );
 #endif
         // concatenate static rotation around the Z angle (1,0,0)
