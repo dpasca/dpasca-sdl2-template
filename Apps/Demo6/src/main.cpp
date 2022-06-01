@@ -19,10 +19,11 @@
 
 //#define ENABLE_DEBUG_DRAW
 #define DO_SPIN_TRIANGLE
+#define ANIM_OBJ_POS
 
 //==================================================================
 static constexpr float VOXEL_DIM        = 1.000f;   // 1 meter span
-static constexpr float VOXEL_CELL_UNIT  = 0.015f;
+static constexpr float VOXEL_CELL_UNIT  = VOXEL_DIM/64;
 
 static constexpr float CAMERA_DIST      = 1.5f;     // distance from center
 static constexpr float CAMERA_FOV_DEG   = 70.f;     // field of view
@@ -367,11 +368,11 @@ int main( int argc, char *argv[] )
         const auto objAngY = (float)((double)frameCnt / 200.0); // in radiants
         // start with identity matrix
         auto world_obj = Matrix44( 1.f );
-
+#ifdef ANIM_OBJ_POS
         // move the object on the Z
         c_auto objZ = glm::mix( -0.3f, 1.0f, ((sin( frameCnt / 250.0 )+1)/2) );
         world_obj = glm::translate( world_obj, Float3(0.0f, 0.0f, objZ) );
-
+#endif
         // concatenate static rotation around the Z angle (1,0,0)
         world_obj = glm::rotate( world_obj, DEG2RAD( 7.f ), Float3( 1, 0, 0 ) );
         // concatenate rotation around the Y angle (0,1,0)
