@@ -105,6 +105,8 @@ public:
     auto GetVoxN1() const { return mN1; }
     auto GetVoxN2() const { return mN2; }
 
+    auto GetVoxCellW() const { return mUnit[0]; }
+
 private:
     void buildTessTri(
             const Float3 &v0,

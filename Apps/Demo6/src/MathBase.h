@@ -16,6 +16,7 @@
 #include <glm/ext/matrix_clip_space.hpp> // glm::perspective
 #include <glm/ext/scalar_constants.hpp>  // glm::pi
 
+using Float2 = glm::vec3;
 using Float3 = glm::vec3;
 using Int3 = glm::ivec3;
 

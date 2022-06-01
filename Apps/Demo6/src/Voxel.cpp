@@ -127,7 +127,7 @@ void Voxel::SetBBoxAndUnit( const BBoxT &bbox, float baseUnit, VLenT maxDimL2 )
 
     VOXASSERT( minUnit > EPS && minUnit != FLT_MAX );
 
-    mOOUnitForTess = minUnit ? (1.f / minUnit * 0.10f) : 1.f;
+    mOOUnitForTess = minUnit ? (1.f / minUnit * 1.00f) : 1.f;
 }
 
 //==================================================================

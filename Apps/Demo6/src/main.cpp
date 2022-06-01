@@ -21,73 +21,80 @@
 #define DO_SPIN_TRIANGLE
 
 //==================================================================
-#if 0
-inline BBoxT calcBBoxFromVerts( const Float3 *pPos, const size_t posN )
-{
-    BBoxT bbox;
+static constexpr float VOXEL_DIM        = 1.000f;   // 1 meter span
+static constexpr float VOXEL_CELL_UNIT  = 0.015f;
 
-    bbox[0] = Float3(  FLT_MAX,  FLT_MAX,  FLT_MAX );
-    bbox[1] = Float3( -FLT_MAX, -FLT_MAX, -FLT_MAX );
-
-    // NOTE: assumes that all pos verts are relevant !
-    // ..otherwise will need to check with pIndices
-    for (size_t i=0; i < posN; ++i)
-    {
-        bbox[0] = glm::min( bbox[0], pPos[i] );
-        bbox[1] = glm::max( bbox[1], pPos[i] );
-    }
-
-    return bbox;
-}
-#endif
+static constexpr float CAMERA_DIST      = 1.5f;     // distance from center
+static constexpr float CAMERA_FOV_DEG   = 70.f;     // field of view
+static constexpr float CAMERA_NEAR      = 0.01f;    // near plane (1 cm)
+static constexpr float CAMERA_FAR       = 100.f;    // far plane (100 m)
 
 //==================================================================
-inline Float3 makeDeviceVert( const Matrix44 &xform,
-                              const Float3 &srcPoint,
-                              float deviceW,
-                              float deviceH )
+// vertex coming from the object
+struct VertObj
 {
-    // homogeneus coordinates (-w..w)
-    const auto homo = xform * glm::vec4( srcPoint, 1.f );
+    Float3      pos;
+    float       siz;
+    uint32_t    col;
+};
+// vertex output in screen space
+struct VertDev
+{
+    Float3      pos {};
+    Float2      siz {};
+    uint32_t    col {};
+};
 
-    // skip if it's behind the camera
-    if ( homo.z <= 0 )
-        return {0,0,0};
+//==================================================================
+inline VertDev makeDeviceVert(
+                    const Matrix44 &xform,
+                    const VertObj &vobj,
+                    float deviceW,
+                    float deviceH )
+{
+    VertDev vdev;
+
+    // homogeneus coordinates (-w..w)
+    const auto posH = xform * glm::vec4( vobj.pos, 1.f );
+
+    if ( posH[2] <= 0 ) // skip if it's behind the camera
+        return vdev;
 
     // convert to screen-space, meaning that anything visible is
     // in the range -1..1 for x,y and 0..1 for z
-    const auto oow = 1.f / homo.w;
-    const auto screenX = homo.x * oow;
-    const auto screenY = homo.y * oow;
-    const auto screenZ = homo.z * oow;
+    const auto oow = 1.f / posH.w;
 
-    // 0..deviceW (we flip vertically, from 3D standard to computer display standard)
-    const auto deviceX = deviceW * (screenX + 1) * 0.5f;
-    const auto deviceY = deviceH * (1 - screenY) * 0.5f;
+    vdev.pos[0] = deviceW * (posH[0] * oow + 1) * 0.5f;
+    vdev.pos[1] = deviceH * (1 - posH[1] * oow) * 0.5f;
+    vdev.pos[2] = posH[2] * oow;
 
-    // generate the output vertex in device-space for X and Y and screen-space for Z
-    // notice that Z is only used for sorting, so we could just use Z from homo space
-    return { deviceX, deviceY, screenZ };
+    vdev.siz[0] = deviceW * vobj.siz * oow;
+    vdev.siz[1] = deviceH * vobj.siz * oow;
+
+    vdev.col = vobj.col;
+
+    return vdev;
 }
 
 //
 inline bool isValidDeviceVert( const Float3 &vert )
 {
-    return vert.z != 0.f;
+    return vert[2] != 0.f;
 }
 
 //==================================================================
-inline void drawAtom( auto *pRend, float x, float y, uint32_t col )
+inline void drawAtom( auto *pRend, const VertDev &vdev )
 {
-    SDL_SetRenderDrawColor( pRend, (col>>16)&0xff,(col>>8)&0xff, (col>>0)&0xff, 255 );
-    constexpr int W = 7;
-    constexpr int H = 7;
-    SDL_Rect rc;
-    rc.x = (int)(x - W/2.f);
-    rc.y = (int)(y - W/2.f);
-    rc.w = W;
-    rc.h = H;
-    SDL_RenderFillRect( pRend, &rc );
+    c_auto c = vdev.col;
+    SDL_SetRenderDrawColor( pRend, (c>>16)&0xff, (c>>8)&0xff, (c>>0)&0xff, 255 );
+    SDL_FRect rc;
+    c_auto w = vdev.siz[0];
+    c_auto h = vdev.siz[1];
+    rc.x = (float)(vdev.pos[0] - w*0.5f);
+    rc.y = (float)(vdev.pos[1] - h*0.5f);
+    rc.w = w;
+    rc.h = h;
+    SDL_RenderFillRectF( pRend, &rc );
 }
 
 //==================================================================
@@ -130,11 +137,14 @@ inline void voxel_DebugDraw(
     auto draw3DLine = [&]( auto i, auto j )
     {
         // convert from object-space to device-space (2D display dimensions)
-        c_auto v1 = makeDeviceVert( proj_obj, verts[i], deviceW, deviceH );
-        c_auto v2 = makeDeviceVert( proj_obj, verts[j], deviceW, deviceH );
+        c_auto v1 = makeDeviceVert( proj_obj, {verts[i],0.f}, deviceW, deviceH );
+        c_auto v2 = makeDeviceVert( proj_obj, {verts[j],0.f}, deviceW, deviceH );
 
-        if ( v1[2] > 0 && v2[2] > 0 )
-            SDL_RenderDrawLine( pRend, (int)v1[0], (int)v1[1], (int)v2[0], (int)v2[1] );
+        c_auto v1p = v1.pos;
+        c_auto v2p = v2.pos;
+
+        if ( v1p[2] > 0 && v2p[2] > 0 )
+            SDL_RenderDrawLineF( pRend, v1p[0], v1p[1], v2p[0], v2p[1] );
     };
 
     SDL_SetRenderDrawColor( pRend, 0, 255, 0, 90 );
@@ -162,17 +172,14 @@ inline void voxel_Draw(
                 float deviceH,
                 const Matrix44 &proj_obj )
 {
-    struct OutVert
-    {
-        Float3      pos;
-        uint32_t    col;
-    };
-    std::vector<OutVert> xformedVerts;
+    std::vector<VertDev> vertsDev;
 
     c_auto siz3 = vox.GetVoxSize();
     c_auto bbox = vox.GetVoxBBox();
     c_auto vsca = (bbox[1] - bbox[0]) / Float3( siz3[0]-1, siz3[1]-1, siz3[2]-1 );
     c_auto vtra = bbox[0];
+
+    c_auto cellW = vox.GetVoxCellW();
 
     c_auto *pCells = vox.GetVoxCells().data();
 
@@ -191,35 +198,31 @@ inline void voxel_Draw(
 
                 c_auto x = vtra[0] + vsca[0] * (float)xi;
 
+                VertObj vobj;
+                vobj.pos = {x,y,z};
+                vobj.siz = cellW;
+                vobj.col = val;
+
                 // convert from object-space to device-space (2D display dimensions)
-                c_auto deviceVert = makeDeviceVert( proj_obj, {x,y,z}, deviceW, deviceH );
+                c_auto vout = makeDeviceVert( proj_obj, vobj, deviceW, deviceH );
 
                 // store the vertex
-                if ( deviceVert.z > 0 )
-                    xformedVerts.push_back({ deviceVert, val });
+                if ( vout.pos[2] > 0 )
+                    vertsDev.push_back( vout );
             }
         }
     }
 
     // sort with bigger Z first
-    std::sort( xformedVerts.begin(), xformedVerts.end(), []( const auto &l, const auto &r )
+    std::sort( vertsDev.begin(), vertsDev.end(), []( c_auto &l, c_auto &r )
     {
         return l.pos[2] > r.pos[2];
     });
 
     // finally render the verts
-    for (const auto &v : xformedVerts)
-        drawAtom( pRend, v.pos[0], v.pos[1], v.col );
+    for (const auto &v : vertsDev)
+        drawAtom( pRend, v );
 }
-
-//==================================================================
-static constexpr float VOXEL_HDIM       = 0.5f;      // 1 meter span
-static constexpr float VOXEL_CELL_UNIT  = 0.004;
-
-static constexpr float CAMERA_DIST      = 1.5f;     // 1.5 meters away
-static constexpr float CAMERA_FOV_DEG   = 70.f;     // field of view
-static constexpr float CAMERA_NEAR      = 0.01f;    // near plane (1 cm)
-static constexpr float CAMERA_FAR       = 100.f;    // far plane (100 m)
 
 //==================================================================
 inline float DEG2RAD( float deg )
@@ -230,8 +233,8 @@ inline float DEG2RAD( float deg )
 //==================================================================
 static void voxel_Init( auto &vox )
 {
-    vox.SetBBoxAndUnit( BBoxT{{ {-VOXEL_HDIM, -VOXEL_HDIM, -VOXEL_HDIM},
-                                { VOXEL_HDIM,  VOXEL_HDIM,  VOXEL_HDIM}}},
+    vox.SetBBoxAndUnit( BBoxT{{ {-VOXEL_DIM/2, -VOXEL_DIM/2, -VOXEL_DIM/2},
+                                { VOXEL_DIM/2,  VOXEL_DIM/2,  VOXEL_DIM/2}}},
                         VOXEL_CELL_UNIT,
                         10 );
 };
@@ -242,9 +245,9 @@ static void voxel_Update( auto &vox, size_t frameCnt )
     // make a vertex in voxel-space (0,0,0 -> box_min, 1,1,1 -> box_max)
     auto V = [&]( c_auto s, c_auto t, c_auto q )
     {
-        c_auto voxX = glm::mix( -VOXEL_HDIM,  VOXEL_HDIM, s );
-        c_auto voxY = glm::mix( -VOXEL_HDIM,  VOXEL_HDIM, t );
-        c_auto voxZ = glm::mix( -VOXEL_HDIM,  VOXEL_HDIM, q );
+        c_auto voxX = glm::mix( -VOXEL_DIM/2,  VOXEL_DIM/2, s );
+        c_auto voxY = glm::mix( -VOXEL_DIM/2,  VOXEL_DIM/2, t );
+        c_auto voxZ = glm::mix( -VOXEL_DIM/2,  VOXEL_DIM/2, q );
 
         return Float3( voxX, voxY, voxZ );
     };
@@ -336,8 +339,8 @@ static void voxel_Update( auto &vox, size_t frameCnt )
 //==================================================================
 int main( int argc, char *argv[] )
 {
-    constexpr int  W = 640;
-    constexpr int  H = 480;
+    constexpr int  W = 800;
+    constexpr int  H = 600;
 
     MinimalSDLApp app( argc, argv, W, H );
 
@@ -364,6 +367,11 @@ int main( int argc, char *argv[] )
         const auto objAngY = (float)((double)frameCnt / 200.0); // in radiants
         // start with identity matrix
         auto world_obj = Matrix44( 1.f );
+
+        // move the object on the Z
+        c_auto objZ = glm::mix( -0.3f, 1.0f, ((sin( frameCnt / 250.0 )+1)/2) );
+        world_obj = glm::translate( world_obj, Float3(0.0f, 0.0f, objZ) );
+
         // concatenate static rotation around the Z angle (1,0,0)
         world_obj = glm::rotate( world_obj, DEG2RAD( 7.f ), Float3( 1, 0, 0 ) );
         // concatenate rotation around the Y angle (0,1,0)
@@ -399,7 +407,7 @@ int main( int argc, char *argv[] )
         app.EndFrame();
 
         // reasonable frame rate, since there's no vsync
-        SDL_Delay( 10 );
+        //SDL_Delay( 10 );
     }
 
     return 0;
