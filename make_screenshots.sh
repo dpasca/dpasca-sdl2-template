@@ -22,12 +22,12 @@ function run_demo {
 mkdir -p _tmp
 pushd _tmp
 
-run_demo "1" 2
-run_demo "2" 2
-run_demo "3" 2
-run_demo "4" 2
-run_demo "5" 2
-run_demo "6" 3.5
+run_demo "1" 50
+run_demo "2" 50
+run_demo "3" 50
+run_demo "4" 50
+run_demo "5" 50
+run_demo "6" 110
 
 mogrify -format png *.bmp
 
