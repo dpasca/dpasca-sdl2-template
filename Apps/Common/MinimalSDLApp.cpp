@@ -11,6 +11,8 @@
 #include <filesystem>
 #include "MinimalSDLApp.h"
 
+static constexpr auto TARGET_FRAME_TIME_S = 1.0 / 60;
+
 //==================================================================
 inline double getSteadyTimeSecs()
 {
@@ -36,7 +38,7 @@ Usage
 
 Options
   --help                       : This help
-  --autoexit_delay <secs>      : Automatically exit after a number of seconds
+  --autoexit_delay <frames>    : Automatically exit after a number of frames
   --autoexit_savesshot <fname> : Save a screenshot on automatic exit
 )RAW", argv[0] );
 
@@ -65,7 +67,7 @@ Options
         }
         else if ( isparam("--autoexit_delay") )
         {
-            mExitSteadyTimeS = getSteadyTimeSecs() + std::stod( nextParam() );
+            mExitFrameN = (size_t)std::stoi( nextParam() );
         }
         else if ( isparam("--autoexit_savesshot") )
         {
@@ -148,7 +150,7 @@ bool MinimalSDLApp::BeginFrame()
     }
 
     // see if we need to exit because of the established timeout
-    if ( mExitSteadyTimeS && getSteadyTimeSecs() > mExitSteadyTimeS )
+    if ( mExitFrameN && mFrameCnt >= mExitFrameN )
     {
         printf( "Automatic exit\n" );
         if ( !mSaveSShotPFName.empty() )
@@ -166,7 +168,21 @@ bool MinimalSDLApp::BeginFrame()
 //==================================================================
 void MinimalSDLApp::EndFrame()
 {
+    // rudimentary frame sync, only if we're not in auto-exit mode
+    if ( !mExitFrameN )
+    {
+        const auto curTimeS = getSteadyTimeSecs();
+        const auto elapsedS = curTimeS - mLastFrameTimeS;
+
+        if ( elapsedS < TARGET_FRAME_TIME_S )
+            SDL_Delay( (uint32_t)((TARGET_FRAME_TIME_S - elapsedS) * 1000) );
+
+        mLastFrameTimeS = curTimeS;
+    }
+
     SDL_UpdateWindowSurface( mpWindow );
+
+    mFrameCnt += 1;
 }
 
 //==================================================================

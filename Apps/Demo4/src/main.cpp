@@ -204,9 +204,6 @@ int main( int argc, char *argv[] )
 
         // end of the frame (will present)
         app.EndFrame();
-
-        // reasonable frame rate, since there's no vsync
-        SDL_Delay( 10 );
     }
 
     return 0;

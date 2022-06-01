@@ -19,7 +19,10 @@ class MinimalSDLApp
     SDL_Surface     *mpSurface  {};
     SDL_Renderer    *mpRenderer {};
 
-    double          mExitSteadyTimeS  {};
+    size_t          mFrameCnt       {};
+    double          mLastFrameTimeS {};
+
+    size_t          mExitFrameN {};
     std::string     mSaveSShotPFName;
 
 public:
