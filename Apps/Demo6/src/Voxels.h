@@ -6,8 +6,8 @@
 /// copyright info.
 //==================================================================
 
-#ifndef VOXEL_H
-#define VOXEL_H
+#ifndef VOXELS_H
+#define VOXELS_H
 
 #include <stdint.h>
 #include <array>
