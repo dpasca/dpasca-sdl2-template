@@ -2,4 +2,5 @@ _build
 _bin
 _tmp
 ctags.d/
+tags
 
