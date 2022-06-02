@@ -14,6 +14,7 @@
 #include <algorithm> // for std::sort
 #include "MathBase.h"
 #include "Voxels.h"
+#include "VoxelsGen.h"
 
 #include "MinimalSDLApp.h"
 
@@ -281,14 +282,14 @@ static void voxel_Update( auto &vox, size_t frameCnt )
             return Float3( world_obj * glm::vec4( V( s, t, q ), 1.f ) );
         };
 
-        vox.AddTrig(
+        VGen_DrawTrig( vox,
             xformV( 0.50f, 0.9f, 0.5f ),
             xformV( 0.10f, 0.1f, 0.5f ),
             xformV( 0.90f, 0.1f, 0.5f ),
             0xff0000 );
     }
 #else
-    vox.AddTrig(
+    VGen_DrawTrig( vox,
         V( 0.50f, 0.9f, 0.5f ),
         V( 0.10f, 0.1f, 0.5f ),
         V( 0.90f, 0.1f, 0.5f ),
@@ -296,7 +297,7 @@ static void voxel_Update( auto &vox, size_t frameCnt )
 #endif
 
     // white floor
-    vox.AddQuad(
+    VGen_DrawQuad( vox,
         V(0.00f, 0.f, 0.00f), V(0.00f, 0.f, 1.00f),
         V(1.00f, 0.f, 0.00f), V(1.00f, 0.f, 1.00f),
         0xe0e0e0 );
@@ -305,7 +306,7 @@ static void voxel_Update( auto &vox, size_t frameCnt )
     {
         c_auto y = ((float)sin( (double)frameCnt / 40 ) + 1) / 2;
 
-        vox.AddQuad(
+        VGen_DrawQuad( vox,
             V(0.10f, y, 0.10f), V(0.10f, y, 0.90f),
             V(0.90f, y, 0.10f), V(0.90f, y, 0.90f),
             0x0010ff );
@@ -318,7 +319,7 @@ static void voxel_Update( auto &vox, size_t frameCnt )
 
         auto drawLine = [&]( auto i, auto j )
         {
-            vox.DrawLine( verts[i], verts[j], 0x00ff00 );
+            VGen_DrawLine( vox, verts[i], verts[j], 0x00ff00 );
         };
 
         // bottom and top

@@ -29,5 +29,8 @@ using Matrix44 = glm::mat4;
 # define NOT(X) (!(X))
 #endif
 
+//==================================================================
+inline auto lengthSqr = []( c_auto &v ) { return glm::dot( v, v ); };
+
 #endif
 
