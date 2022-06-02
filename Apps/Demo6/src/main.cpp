@@ -13,7 +13,7 @@
 #include <vector>
 #include <algorithm> // for std::sort
 #include "MathBase.h"
-#include "Voxel.h"
+#include "Voxels.h"
 
 #include "MinimalSDLApp.h"
 
@@ -126,7 +126,7 @@ static std::array<T,8> makeCubeVerts( const T &mi, const T &ma )
 //==================================================================
 inline void voxel_DebugDraw(
                 auto *pRend,
-                const Voxel &vox,
+                const Voxels &vox,
                 float deviceW,
                 float deviceH,
                 const Matrix44 &proj_obj )
@@ -168,7 +168,7 @@ inline void voxel_DebugDraw(
 //==================================================================
 inline void voxel_Draw(
                 auto *pRend,
-                const Voxel &vox,
+                const Voxels &vox,
                 float deviceW,
                 float deviceH,
                 const Matrix44 &proj_obj )
@@ -346,7 +346,7 @@ int main( int argc, char *argv[] )
     MinimalSDLApp app( argc, argv, W, H );
 
     // create the voxel
-    Voxel vox;
+    Voxels vox;
 
     voxel_Init( vox );
 

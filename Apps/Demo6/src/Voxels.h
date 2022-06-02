@@ -1,5 +1,5 @@
 //==================================================================
-/// Voxel.h
+/// Voxels.h
 ///
 /// Created by Davide Pasca - 2022/05/29
 /// See the file "license.txt" that comes with this project for
@@ -29,7 +29,7 @@ using VLenT = unsigned int;
 using BBoxT = std::array<Float3,2>;
 
 //==================================================================
-class Voxel
+class Voxels
 {
 public:
     using CellType = uint32_t;
@@ -40,7 +40,7 @@ public:
     BBoxT       mBBox  {};
     Float3      mUnit  {0,0,0};
 private:
-    Float3      mVS_LS {0,0,0}; // Voxel Space from Local Space (scale only)
+    Float3      mVS_LS {0,0,0}; // Voxels Space from Local Space (scale only)
     float       mOOUnitForTess = 0;
     VLenT       mN0 = 0;
     VLenT       mN1 = 0;
@@ -49,21 +49,21 @@ private:
 public:
     void SetBBoxAndUnit( const BBoxT &bbox, float baseUnit, VLenT maxDimL2 );
 
-    void ClearVox( CellType val );
+    void ClearVox( const CellType &val );
 
-    void SetCell( const Float3 &pos, CellType val );
+    void SetCell( const Float3 &pos, const CellType &val );
 
     void AddTrigs(
             const Float3 *pPos,
             const size_t posN,
             const VVec<uint16_t> *pIndices,
-            CellType val );
+            const CellType &val );
 
     void AddTrig(
             const Float3 v0,
             const Float3 v1,
             const Float3 v2,
-            CellType val )
+            const CellType &val )
     {
         const Float3 poses[3] = { v0, v1, v2 };
         AddTrigs( poses, 3, nullptr, val );
@@ -74,7 +74,7 @@ public:
             const Float3 &p01,
             const Float3 &p10,
             const Float3 &p11,
-            CellType val );
+            const CellType &val );
 
     void CheckLine(
                     const Float3 &lineSta,
@@ -112,11 +112,11 @@ private:
             const Float3 &v0,
             const Float3 &v1,
             const Float3 &v2,
-            CellType val );
+            const CellType &val );
 };
 
 //==================================================================
-inline void Voxel::SetCell( const Float3 &pos, CellType val )
+inline void Voxels::SetCell( const Float3 &pos, const CellType &val )
 {
     VOXASSERT(
         (pos[0] >= mBBox[0][0] && pos[0] <= mBBox[1][0]) &&

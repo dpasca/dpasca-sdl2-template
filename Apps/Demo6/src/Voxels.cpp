@@ -1,5 +1,5 @@
 //==================================================================
-/// Voxel.h
+/// Voxels.h
 ///
 /// Created by Davide Pasca - 2022/05/29
 /// See the file "license.txt" that comes with this project for
@@ -7,7 +7,7 @@
 //==================================================================
 
 #include <float.h>
-#include "Voxel.h"
+#include "Voxels.h"
 
 //==================================================================
 inline auto lengthSqr = []( c_auto &v ) { return glm::dot( v, v ); };
@@ -86,7 +86,7 @@ inline VLenT log2ceil( VLenT val )
 }
 
 //==================================================================
-void Voxel::SetBBoxAndUnit( const BBoxT &bbox, float baseUnit, VLenT maxDimL2 )
+void Voxels::SetBBoxAndUnit( const BBoxT &bbox, float baseUnit, VLenT maxDimL2 )
 {
     mBBox = bbox;
 
@@ -131,17 +131,17 @@ void Voxel::SetBBoxAndUnit( const BBoxT &bbox, float baseUnit, VLenT maxDimL2 )
 }
 
 //==================================================================
-void Voxel::ClearVox( CellType val )
+void Voxels::ClearVox( const CellType &val )
 {
     std::fill( mCells.begin(), mCells.end(), val );
 }
 
 //==================================================================
-void Voxel::AddTrigs(
+void Voxels::AddTrigs(
             const Float3 *pPos,
             const size_t posN,
             const VVec<uint16_t> *pIndices,
-            CellType val )
+            const CellType &val )
 {
     VOXASSERT( (pIndices && (*pIndices).size() % 3 == 0) || posN % 3 == 0 );
 
@@ -159,12 +159,12 @@ void Voxel::AddTrigs(
 }
 
 //==================================================================
-void Voxel::AddQuad(
+void Voxels::AddQuad(
         const Float3 &p00,
         const Float3 &p01,
         const Float3 &p10,
         const Float3 &p11,
-        CellType val )
+        const CellType &val )
 {
     c_auto dh0 = p01 - p00;
     c_auto dh1 = p11 - p10;
@@ -214,11 +214,11 @@ void Voxel::AddQuad(
 }
 
 //==================================================================
-void Voxel::buildTessTri(
+void Voxels::buildTessTri(
         const Float3 &v0,
         const Float3 &v1,
         const Float3 &v2,
-        CellType val )
+        const CellType &val )
 {
     c_auto mid = (v0 + v1 + v2) * (1.0f/3);
     c_auto a   = (v0 + v1) * 0.5f;
@@ -231,7 +231,7 @@ void Voxel::buildTessTri(
 }
 
 //==================================================================
-bool Voxel::FindClosestNonEmptyCellCtr(
+bool Voxels::FindClosestNonEmptyCellCtr(
                         const Float3 &posLS,
                         Float3 &out_foundCellCenterLS ) const
 {
@@ -239,7 +239,7 @@ bool Voxel::FindClosestNonEmptyCellCtr(
     c_auto nn1 = 1 << mN1;
     c_auto nn2 = 1 << mN2;
 
-    // position to check in Voxel Space
+    // position to check in Voxels Space
     auto posVS = mVS_LS * (posLS - mBBox[0]);
 
     auto  closestSqr   = FLT_MAX;
@@ -259,7 +259,7 @@ bool Voxel::FindClosestNonEmptyCellCtr(
                 if NOT( cell )
                     continue;
 
-                // center of the cell in Voxel Space
+                // center of the cell in Voxels Space
                 const Float3 cellCtrVS(
                             ((float)i0+0.5f),
                             ((float)i1+0.5f),
@@ -413,7 +413,7 @@ inline auto voxLineScan = [](
 };
 
 //==================================================================
-void Voxel::CheckLine(
+void Voxels::CheckLine(
                     const Float3 &lineSta,
                     const Float3 &lineEnd,
                     VVec<const CellType*> &out_checkRes ) const
@@ -429,7 +429,7 @@ void Voxel::CheckLine(
 }
 
 //==================================================================
-void Voxel::DrawLine(
+void Voxels::DrawLine(
                     const Float3 &lineSta,
                     const Float3 &lineEnd,
                     const CellType &srcVal )
