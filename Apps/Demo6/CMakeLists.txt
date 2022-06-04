@@ -23,8 +23,6 @@ add_executable( ${PROJECT_NAME}
                 ${SRCS_COM} ${INCS_COM}
                 ${INCS_GLM} )
 
-link_directories( ${SDL_LIBRARY_DIRS} )
-
 target_link_libraries( ${PROJECT_NAME}
     ${SDL_LIBRARIES} ${SDL_LIBRARIES_EXTRA} ${PLATFORM_LINK_LIBS} )
 

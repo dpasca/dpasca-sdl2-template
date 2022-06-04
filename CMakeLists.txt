@@ -112,39 +112,13 @@ if (USE_SDL)
         set(SDL_STATIC FALSE )
         add_subdirectory( externals/SDL2 )
 
-        if (WIN32)
-            set(SDL_ROOT_DIR ${CMAKE_BINARY_DIR}/externals/SDL2)
+        set(SDL_ROOT_DIR ${CMAKE_BINARY_DIR}/externals/SDL2)
+        set(SDL_LIBRARIES SDL2 SDL2main )
 
-            set(SDL_LIBRARY_DIRS ${SDL_ROOT_DIR}/Release ${SDL_ROOT_DIR}/Debug )
-
-            set(SDL_LIBRARIES
-                optimized   ${SDL_ROOT_DIR}/Release/SDL2main.lib
-                debug       ${SDL_ROOT_DIR}/Debug/SDL2maind.lib
-                optimized   ${SDL_ROOT_DIR}/Release/SDL2.lib
-                debug       ${SDL_ROOT_DIR}/Debug/SDL2d.lib )
-
-            # from https://stackoverflow.com/a/39128297/1507238
-            # NOTE: updated list comes from cmake output
-            set(SDL_LIBRARIES_EXTRA
-                user32;gdi32;winmm;imm32;ole32;oleaut32;version;uuid;advapi32;setupapi;shell32;dinput8 )
-        elseif (UNIX)
-            set(SDL_ROOT_DIR ${CMAKE_BINARY_DIR}/externals/SDL2)
-
-            set(SDL_LIBRARY_DIRS ${SDL_ROOT_DIR})
-
-            set(SDL_LIBRARIES
-                optimized   ${SDL_ROOT_DIR}/libSDL2main.a
-                debug       ${SDL_ROOT_DIR}/libSDL2maind.a
-                optimized   ${SDL_ROOT_DIR}/libSDL2.a
-                debug       ${SDL_ROOT_DIR}/libSDL2d.a )
-
+        if (UNIX)
             # for dlclose()
             set(SDL_LIBRARIES_EXTRA ${CMAKE_DL_LIBS})
         endif()
-
-        #message( "SDL_LIBRARY_DIRS = ${SDL_LIBRARY_DIRS}" )
-        #message( "SDL_LIBRARIES = ${SDL_LIBRARIES}" )
-        #message( "SDL_LIBRARIES_EXTRA = ${SDL_LIBRARIES_EXTRA}" )
 
         # include path for using code
         include_directories( externals/SDL2/include )
