@@ -17,7 +17,7 @@ If you're on Windows. All commands are meant to run under Git Bash, not MS-DOS.
 
 ## Quick Start
 
-### 1) Get the exteranl dependencies
+### 1) Get the external dependencies
 ```bash
 ./get_externals.sh
 ```
