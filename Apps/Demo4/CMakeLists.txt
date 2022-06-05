@@ -4,7 +4,7 @@ include_directories( . )
 include_directories( src )
 include_directories( ../Common )
 # include glm, this is all that it's needed
-include_directories( ../../externals/glm )
+include_directories( ../../_externals/glm )
 
 file( GLOB SRCS "src/*.cpp" )
 file( GLOB INCS "src/*.h" )
@@ -12,7 +12,7 @@ file( GLOB SRCS_COM "../Common/*.cpp" )
 file( GLOB INCS_COM "../Common/*.h" )
 
 # adding this to the exe is only for intellisense, not to compile
-file( GLOB INCS_GLM "../externals/glm/glm/*.hpp" )
+file( GLOB INCS_GLM "../_externals/glm/glm/*.hpp" )
 
 source_group( Sources FILES ${SRCS} ${INCS} )
 source_group( Common FILES ${SRCS_COM} ${INCS_COM} )
