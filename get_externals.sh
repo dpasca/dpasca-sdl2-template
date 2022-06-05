@@ -1,8 +1,9 @@
 #!/bin/bash
 
 BASHSCRIPTDIR=$(cd "$(dirname "$0")" || exit; pwd)
-DEPENDENCIESDIR="${BASHSCRIPTDIR}/_externals"
+EXTDIR="${BASHSCRIPTDIR}/_externals"
 GLMVER="0.9.9.8"
+SDLVER="release-2.0.22"
 
 checkout_revision(){
     REMOTE_REPO=$1
@@ -20,8 +21,9 @@ checkout_revision(){
     cd .. || exit
 }
 
-mkdir -p "${DEPENDENCIESDIR}" || exit 1
-pushd "${DEPENDENCIESDIR}" || exit 1
-checkout_revision "https://github.com/g-truc/glm"   "${GLMVER}"
+mkdir -p "${EXTDIR}" || exit 1
+pushd "${EXTDIR}" || exit 1
+checkout_revision "https://github.com/g-truc/glm"       "${GLMVER}"
+checkout_revision "https://github.com/libsdl-org/SDL"   "${SDLVER}"
 popd
 

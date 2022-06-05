@@ -17,9 +17,9 @@ If you're on Windows. All commands are meant to run under Git Bash, not MS-DOS.
 
 ## Quick Start
 
-### 1) Get the submodules
+### 1) Get the exteranl dependencies
 ```bash
-git submodule update --init --recursive
+./get_externals.sh
 ```
 
 ### 2) Do a full build

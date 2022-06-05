@@ -100,29 +100,25 @@ endif()
 #==================================================================
 # externals
 
-if (USE_SDL)
-    add_definitions( -DUSE_SDL )
+if (EMSCRIPTEN)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sUSE_SDL=2")
+else()
+    # NOTE: for some reason the Debug build always goes for dll, so we
+    #  must make it. arghh
+    set(SDL_SHARED TRUE )
+    set(SDL_STATIC FALSE )
+    add_subdirectory( _externals/SDL )
 
-    if (EMSCRIPTEN)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sUSE_SDL=2")
-    else()
-        # NOTE: for some reason the Debug build always goes for dll, so we
-        #  must make it. arghh
-        set(SDL_SHARED TRUE )
-        set(SDL_STATIC FALSE )
-        add_subdirectory( externals/SDL2 )
+    set(SDL_ROOT_DIR ${CMAKE_BINARY_DIR}/_externals/SDL)
+    set(SDL_LIBRARIES SDL2 SDL2main )
 
-        set(SDL_ROOT_DIR ${CMAKE_BINARY_DIR}/externals/SDL2)
-        set(SDL_LIBRARIES SDL2 SDL2main )
-
-        if (UNIX)
-            # for dlclose()
-            set(SDL_LIBRARIES_EXTRA ${CMAKE_DL_LIBS})
-        endif()
-
-        # include path for using code
-        include_directories( externals/SDL2/include )
+    if (UNIX)
+        # for dlclose()
+        set(SDL_LIBRARIES_EXTRA ${CMAKE_DL_LIBS})
     endif()
+
+    # include path for using code
+    include_directories( _externals/SDL/include )
 endif()
 
 #==================================================================
