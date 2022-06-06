@@ -19,8 +19,8 @@
 #include "MinimalSDLApp.h"
 
 //#define ENABLE_DEBUG_DRAW
-#define DO_SPIN_TRIANGLE
-#define ANIM_OBJ_POS
+static bool DO_SPIN_TRIANGLE    = true;
+static bool ANIM_OBJ_POS        = true;
 
 //==================================================================
 static constexpr float VOXEL_DIM        = 1.000f;   // 1 meter span
@@ -266,7 +266,7 @@ static void voxel_Update( auto &vox, size_t frameCnt )
     }
 
     // a standing triangle
-#ifdef DO_SPIN_TRIANGLE
+    if ( DO_SPIN_TRIANGLE )
     {
         const auto objAngX = (float)((double)frameCnt / 200.0); // in radiants
         const auto objAngY = (float)((double)frameCnt / 60.0); // in radiants
@@ -288,13 +288,14 @@ static void voxel_Update( auto &vox, size_t frameCnt )
             xformV( 0.90f, 0.1f, 0.5f ),
             0xff0000 );
     }
-#else
-    VGen_DrawTrig( vox,
-        V( 0.50f, 0.9f, 0.5f ),
-        V( 0.10f, 0.1f, 0.5f ),
-        V( 0.90f, 0.1f, 0.5f ),
-        0xff0000 );
-#endif
+    else
+    {
+        VGen_DrawTrig( vox,
+            V( 0.50f, 0.9f, 0.5f ),
+            V( 0.10f, 0.1f, 0.5f ),
+            V( 0.90f, 0.1f, 0.5f ),
+            0xff0000 );
+    }
 
     // white floor
     VGen_DrawQuad( vox,
@@ -339,6 +340,21 @@ static void voxel_Update( auto &vox, size_t frameCnt )
 };
 
 //==================================================================
+static void handleUI( size_t frameCnt )
+{
+#ifdef ENABLE_IMGUI
+    ImGui::Begin( "Vars", nullptr, ImGuiWindowFlags_AlwaysAutoResize );
+
+    ImGui::Text( "Frame: %zu", frameCnt );
+
+    ImGui::Checkbox( "Spin triangle", &DO_SPIN_TRIANGLE );
+    ImGui::Checkbox( "Animate obj position", &ANIM_OBJ_POS );
+
+    ImGui::End();
+#endif
+}
+
+//==================================================================
 int main( int argc, char *argv[] )
 {
     constexpr int  W = 800;
@@ -358,6 +374,8 @@ int main( int argc, char *argv[] )
         if ( !app.BeginFrame() )
             break;
 
+        handleUI( frameCnt );
+
         // get the renderer
         auto *pRend = app.GetRenderer();
 
@@ -369,11 +387,14 @@ int main( int argc, char *argv[] )
         const auto objAngY = (float)((double)frameCnt / 200.0); // in radiants
         // start with identity matrix
         auto world_obj = Matrix44( 1.f );
-#ifdef ANIM_OBJ_POS
-        // move the object on the Z
-        c_auto objZ = glm::mix( -0.3f, 0.5f, ((sin( frameCnt / 250.0 )+1)/2) );
-        world_obj = glm::translate( world_obj, Float3(0.0f, 0.0f, objZ) );
-#endif
+
+        if ( ANIM_OBJ_POS )
+        {
+            // move the object on the Z
+            c_auto objZ = glm::mix( -0.3f, 0.5f, ((sin( frameCnt / 250.0 )+1)/2) );
+            world_obj = glm::translate( world_obj, Float3(0.0f, 0.0f, objZ) );
+        }
+
         // concatenate static rotation around the Z angle (1,0,0)
         world_obj = glm::rotate( world_obj, DEG2RAD( 7.f ), Float3( 1, 0, 0 ) );
         // concatenate rotation around the Y angle (0,1,0)
