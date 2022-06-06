@@ -183,6 +183,9 @@ bool MinimalSDLApp::BeginFrame()
     SDL_Event e;
     while ( SDL_PollEvent(&e) )
     {
+        if ( e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F2 )
+            mShowMainUIWin = !mShowMainUIWin;
+
 #ifdef ENABLE_IMGUI
         ImGui_ImplSDL2_ProcessEvent( &e );
 #endif
@@ -253,6 +256,23 @@ void MinimalSDLApp::EndFrame()
     SDL_UpdateWindowSurface( mpWindow );
 
     mFrameCnt += 1;
+}
+
+//==================================================================
+void MinimalSDLApp::DrawMainUIWin( const std::function<void ()> &fn )
+{
+#ifdef ENABLE_IMGUI
+    if ( !mShowMainUIWin )
+        return;
+
+    ImGui::SetNextWindowPos( {4,4}, ImGuiCond_Once );
+    if ( ImGui::Begin( "Main Win", &mShowMainUIWin, ImGuiWindowFlags_AlwaysAutoResize ) )
+    {
+        ImGui::Text( "F2: Show/hide UI" );
+        fn();
+    }
+    ImGui::End();
+#endif
 }
 
 //==================================================================

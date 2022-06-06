@@ -10,6 +10,7 @@
 #define MINIMALSDLAPP_H
 
 #include <string>
+#include <functional>
 #include "SDL.h"
 
 //==================================================================
@@ -25,6 +26,8 @@ class MinimalSDLApp
     size_t          mExitFrameN {};
     std::string     mSaveSShotPFName;
 
+    bool            mShowMainUIWin  {true};
+
 #ifdef ENABLE_OPENGL
     int             mUsingGLVersion_Major {};
     int             mUsingGLVersion_Minor {};
@@ -35,6 +38,8 @@ public:
 
     bool BeginFrame();
     void EndFrame();
+
+    void DrawMainUIWin( const std::function<void ()> &fn );
 
     auto *GetRenderer() { return mpRenderer; }
 

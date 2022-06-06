@@ -340,21 +340,6 @@ static void voxel_Update( auto &vox, size_t frameCnt )
 };
 
 //==================================================================
-static void handleUI( size_t frameCnt )
-{
-#ifdef ENABLE_IMGUI
-    ImGui::Begin( "Vars", nullptr, ImGuiWindowFlags_AlwaysAutoResize );
-
-    ImGui::Text( "Frame: %zu", frameCnt );
-
-    ImGui::Checkbox( "Spin triangle", &DO_SPIN_TRIANGLE );
-    ImGui::Checkbox( "Animate obj position", &ANIM_OBJ_POS );
-
-    ImGui::End();
-#endif
-}
-
-//==================================================================
 int main( int argc, char *argv[] )
 {
     constexpr int  W = 800;
@@ -374,8 +359,14 @@ int main( int argc, char *argv[] )
         if ( !app.BeginFrame() )
             break;
 
-        handleUI( frameCnt );
-
+#ifdef ENABLE_IMGUI
+        app.DrawMainUIWin( [&]()
+        {
+            ImGui::Text( "Frame: %zu", frameCnt );
+            ImGui::Checkbox( "Spin triangle", &DO_SPIN_TRIANGLE );
+            ImGui::Checkbox( "Animate obj position", &ANIM_OBJ_POS );
+        } );
+#endif
         // get the renderer
         auto *pRend = app.GetRenderer();
 
