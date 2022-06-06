@@ -30,6 +30,9 @@ inline auto dlerp = []( const auto &l, const auto &r, const auto t )
     return l * (1 - t) + r * t;
 };
 
+static float STAR_VEL_MIN = 0.5f;
+static float STAR_VEL_MAX = 2.5f;
+
 //==================================================================
 struct Star
 {
@@ -43,7 +46,7 @@ struct Star
         mX = randNorm();
         mY = randNorm();
         mZ = z;
-        mVelZ = -dlerp( 0.5f, 2.5f, randUnit() );
+        mVelZ = -dlerp( STAR_VEL_MIN, STAR_VEL_MAX, randUnit() );
     }
 
     void AnimStar()
@@ -121,8 +124,8 @@ static void starsDraw( auto &stars, auto *pRend, float screenW, float screenH )
 //==================================================================
 int main( int argc, char *argv[] )
 {
-    constexpr int  W = 640;
-    constexpr int  H = 480;
+    constexpr int  W = 800;
+    constexpr int  H = 600;
 
     MinimalSDLApp app( argc, argv, W, H );
 
@@ -138,6 +141,18 @@ int main( int argc, char *argv[] )
         if ( !app.BeginFrame() )
             break;
 
+#ifdef ENABLE_IMGUI
+        app.DrawMainUIWin( [&]()
+        {
+            static float dude2[] {0,0};
+            ImGui::InputFloat( "Vel Min", &STAR_VEL_MIN, 0.1f, 1.0f );
+            ImGui::InputFloat( "Vel Max", &STAR_VEL_MAX, 0.1f, 1.0f );
+            STAR_VEL_MIN = std::max( 0.01f, std::min( STAR_VEL_MIN, 10.f ) );
+            STAR_VEL_MAX = std::max( 0.01f, std::min( STAR_VEL_MAX, 10.f ) );
+            if ( ImGui::Button( "Reset" ) )
+                starsInit( stars );
+        } );
+#endif
         // get the renderer
         auto *pRend = app.GetRenderer();
 
