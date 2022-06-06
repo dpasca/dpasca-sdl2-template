@@ -6,13 +6,16 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake_modules")
 # specify to use Unity Builds
 set(BUILD_UNITY FALSE)
 
-set(USE_SDL TRUE)
+# enable ImGui
+set(ENABLE_IMGUI TRUE)
+
+set(ENABLE_OPENGL FALSE)
 
 #=============================================
 project (dpasca-sdl2-template)
 
 macro(Copy_SDL_DLLs_to_RuntimeOut)
-    if (USE_SDL AND SDL_SHARED AND MSVC)
+    if (SDL_SHARED AND MSVC)
         ADD_CUSTOM_COMMAND( TARGET ${PROJECT_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy
             $<$<CONFIG:Release>:${SDL_ROOT_DIR}/$<CONFIG>/SDL2.dll>
@@ -119,6 +122,22 @@ else()
 
     # include path for using code
     include_directories( _externals/SDL/include )
+endif()
+
+if (ENABLE_IMGUI)
+    add_definitions( -DENABLE_IMGUI )
+
+    if (USE_IMGUI_SDLREND)
+        add_definitions( -DUSE_IMGUI_SDLREND )
+    endif()
+
+    include_directories( _externals/imgui )
+    include_directories( _externals/imgui/backends )
+    include_directories( _externals/imgui/misc/cpp )
+
+    add_subdirectory( externals/local/imgui )
+
+    set(IMGUI_LIBRARIES imgui)
 endif()
 
 #==================================================================

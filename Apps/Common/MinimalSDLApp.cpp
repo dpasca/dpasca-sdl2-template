@@ -9,6 +9,18 @@
 #include <string>
 #include <chrono>
 #include <filesystem>
+#ifdef ENABLE_IMGUI
+# define IMGUI_DEFINE_MATH_OPERATORS
+# include "imgui.h"
+#  include "imgui_impl_sdl.h"
+# ifdef ENABLE_OPENGL
+#  include "imgui_impl_opengl3.h"
+#  include "imgui_impl_opengl2.h"
+# else
+#  include "imgui_impl_sdlrenderer.h"
+# endif
+# include "imgui_internal.h"
+#endif
 #include "MinimalSDLApp.h"
 
 static constexpr auto TARGET_FRAME_TIME_S = 1.0 / 60;
@@ -118,6 +130,11 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h )
     if ( !mpWindow )
         exitErrSDL( "Window creation fail" );
 
+#ifdef ENABLE_OPENGL
+    glGetIntegerv( GL_MAJOR_VERSION, &mUsingGLVersion_Major );
+    glGetIntegerv( GL_MINOR_VERSION, &mUsingGLVersion_Minor );
+#endif
+
     // create the surface
     mpSurface = SDL_GetWindowSurface( mpWindow );
     if ( !mpSurface )
@@ -128,6 +145,30 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h )
 
     if ( !mpRenderer )
         exitErrSDL( "SDL_CreateSoftwareRenderer failed" );
+
+#ifdef ENABLE_IMGUI
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+# ifdef ENABLE_OPENGL
+#  error Not yet supported
+    ImGui_ImplSDL2_InitForOpenGL( mpWindow, mpGLContext );
+    if ( mUsingGLVersion_Major >= 3 )
+    {
+        const char *pGLSLVer = mUsingGLVersion_Major > 3 || mUsingGLVersion_Minor >= 2
+                                    ? "#version 150"
+                                    : "#version 130";
+        ImGui_ImplOpenGL3_Init( pGLSLVer );
+    }
+    else
+    {
+        ImGui_ImplOpenGL2_Init();
+    }
+# else
+    ImGui_ImplSDL2_InitForSDLRenderer( mpWindow, mpRenderer );
+    ImGui_ImplSDLRenderer_Init( mpRenderer );
+# endif
+#endif
 }
 
 //==================================================================
@@ -142,6 +183,9 @@ bool MinimalSDLApp::BeginFrame()
     SDL_Event e;
     while ( SDL_PollEvent(&e) )
     {
+#ifdef ENABLE_IMGUI
+        ImGui_ImplSDL2_ProcessEvent( &e );
+#endif
         if (e.type == SDL_QUIT)
             return false;
 
@@ -162,12 +206,38 @@ bool MinimalSDLApp::BeginFrame()
         return false;
     }
 
+#ifdef ENABLE_IMGUI
+# ifdef ENABLE_OPENGL
+    if ( mUsingGLVersion_Major >= 3 )
+        ImGui_ImplOpenGL3_NewFrame();
+    else
+        ImGui_ImplOpenGL2_NewFrame();
+# else
+    ImGui_ImplSDLRenderer_NewFrame();
+# endif
+    ImGui_ImplSDL2_NewFrame( mpWindow );
+
+    ImGui::NewFrame();
+#endif
+
     return true;
 }
 
 //==================================================================
 void MinimalSDLApp::EndFrame()
 {
+#ifdef ENABLE_IMGUI
+    ImGui::Render();
+# ifdef ENABLE_OPENGL
+    if ( mUsingGLVersion_Major >= 3 )
+        ImGui_ImplOpenGL3_RenderDrawData( ImGui::GetDrawData() );
+    else
+        ImGui_ImplOpenGL2_RenderDrawData( ImGui::GetDrawData() );
+# else
+    ImGui_ImplSDLRenderer_RenderDrawData( ImGui::GetDrawData() );
+# endif
+#endif
+
     // rudimentary frame sync, only if we're not in auto-exit mode
     if ( !mExitFrameN )
     {

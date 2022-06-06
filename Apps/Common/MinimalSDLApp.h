@@ -25,6 +25,10 @@ class MinimalSDLApp
     size_t          mExitFrameN {};
     std::string     mSaveSShotPFName;
 
+#ifdef ENABLE_OPENGL
+    int             mUsingGLVersion_Major {};
+    int             mUsingGLVersion_Minor {};
+#endif
 public:
     MinimalSDLApp( int argc, char *argv[], int w, int h );
     ~MinimalSDLApp();
@@ -40,6 +44,10 @@ private:
     void ctor_parseArgs( int argc, char *argv[] );
 };
 
+#ifdef ENABLE_IMGUI
+# include "imgui.h"
+# include "imgui_stdlib.h"
+#endif
 
 #endif
 
