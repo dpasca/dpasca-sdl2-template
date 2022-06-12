@@ -17,8 +17,6 @@
 
 #include "MinimalSDLApp.h"
 
-static bool ANIM_OBJ_POS        = true;
-
 //==================================================================
 static constexpr float HMAP_DISPW       = 10.f;
 static constexpr float HMAP_MIN_H       = -HMAP_DISPW / 15.f;
@@ -33,12 +31,15 @@ static constexpr Float3 CHROM_SEA       { 0.0f , 0.6f , 0.9f }; // chrominance f
 
 struct DemoParams
 {
-    float CAMERA_FOV_DEG     = 65.f;    // field of view
+    bool     ANIM_OBJ_POS    = false;
+    float    CAMERA_FOV_DEG  = 65.f;    // field of view
 
     uint32_t PLASMA_SIZL2    = 7;       // 128 x 128 map
     uint32_t PLASMA_STASIZL2 = 2;       // 4 x 4 initial random samples
     uint32_t PLASMA_SEED     = 100;     // random seed
     float    PLASMA_ROUGH    = 0.5f;
+
+    bool     WRAPPED_EDGES   = false;
 };
 
 static DemoParams   _sPar;
@@ -201,6 +202,71 @@ inline float DEG2RAD( float deg )
     return glm::pi<float>() / 180.f * deg;
 }
 
+//==================================================================
+template <class _T, size_t CHANS_N>
+void wrapMap( _T *pMap, size_t dimL2, size_t wrapHDim )
+{
+    assert( wrapHDim >= 1 && wrapHDim <= ((1U << dimL2)/2) );
+
+    auto cosLerpCoe = []( float a )
+    {
+        return (1.0f - cosf(a * (float)M_PI)) * 0.5f;
+    };
+
+	int	dim = 1 << dimL2;
+
+	for (int i=0; i < (int)wrapHDim; ++i)
+	{
+		float t1 = cosLerpCoe( 0.5f + 0.5f * (float)i / wrapHDim );
+		float t2 = cosLerpCoe( 0.5f + 0.5f * (float)(i+1) / (wrapHDim + 1) );
+
+		int	i1 = i;
+		int	i2 = dim-1 - i;
+
+		// rows
+		int	row1 = i1 << dimL2;
+		int	row2 = i2 << dimL2;
+		for (int j=0; j < dim; ++j)
+		{
+			int	j1 = j + row1;
+			int	j2 = j + row2;
+			for (int k=0; k < (int)CHANS_N; ++k)
+			{
+				int	jj1 = j1 * CHANS_N + k;
+				int	jj2 = j2 * CHANS_N + k;
+				_T val1 = pMap[ jj1 ];
+				_T val2 = pMap[ jj2 ];
+				pMap[ jj1 ] = (_T)glm::mix( val2, val1, t1 );
+				pMap[ jj2 ] = (_T)glm::mix( val1, val2, t2 );
+			}
+		}
+	}
+
+	for (int i=0; i < (int)wrapHDim; ++i)
+	{
+		float t1 = cosLerpCoe( 0.5f + 0.5f * (float)i / wrapHDim );
+		float t2 = cosLerpCoe( 0.5f + 0.5f * (float)(i+1) / (wrapHDim + 1) );
+
+		int	i1 = i;
+		int	i2 = dim-1 - i;
+
+		// cols
+		for (int j=0; j < dim; ++j)
+		{
+			int	j1 = i1 + (j << dimL2);
+			int	j2 = i2 + (j << dimL2);
+			for (int k=0; k < (int)CHANS_N; ++k)
+			{
+				int	jj1 = j1 * CHANS_N + k;
+				int	jj2 = j2 * CHANS_N + k;
+				_T val1 = pMap[ jj1 ];
+				_T val2 = pMap[ jj2 ];
+				pMap[ jj1 ] = (_T)glm::mix( val2, val1, t1 );
+				pMap[ jj2 ] = (_T)glm::mix( val1, val2, t2 );
+			}
+		}
+	}
+}
 
 //==================================================================
 static void hmap_MakeFromParams( auto &hmap )
@@ -224,6 +290,12 @@ static void hmap_MakeFromParams( auto &hmap )
 
     // normalize the height values from 0.0 to 1.0
     plasma.ScaleResults( 0.f, 1.f );
+
+    // blend edges to make a continuous map
+    if ( _sPar.WRAPPED_EDGES )
+        wrapMap<float,1>( hmap.mHeights.data(),              // data
+                          hmap.mSizeL2,                      // log2 size
+                          ((size_t)1 << hmap.mSizeL2) / 3 ); // length to wrap
 }
 
 #ifdef ENABLE_IMGUI
@@ -231,7 +303,7 @@ static void hmap_MakeFromParams( auto &hmap )
 static void handleUI( size_t frameCnt, HMap &hmap )
 {
     ImGui::Text( "Frame: %zu", frameCnt );
-    ImGui::Checkbox( "Animate obj position", &ANIM_OBJ_POS );
+    ImGui::Checkbox( "Animate obj position", &_sPar.ANIM_OBJ_POS );
 
     ImGui::InputFloat( "Camera FOV", &_sPar.CAMERA_FOV_DEG, 0.5f, 0.10f );
     _sPar.CAMERA_FOV_DEG = std::clamp( _sPar.CAMERA_FOV_DEG, 10.f, 120.f );
@@ -248,6 +320,7 @@ static void handleUI( size_t frameCnt, HMap &hmap )
     rebuild |= inputU32( "Init Size Log2", &_sPar.PLASMA_STASIZL2, 1 );
     rebuild |= ImGui::InputFloat( "Roughness", &_sPar.PLASMA_ROUGH, 0.01f, 0.1f );
     rebuild |= inputU32( "Seed", &_sPar.PLASMA_SEED, 1 );
+    rebuild |= ImGui::Checkbox( "Wrap Edges", &_sPar.WRAPPED_EDGES );
 
     if ( rebuild )
     {
@@ -295,7 +368,7 @@ int main( int argc, char *argv[] )
         // start with identity matrix
         auto world_obj = Matrix44( 1.f );
 
-        if ( ANIM_OBJ_POS )
+        if ( _sPar.ANIM_OBJ_POS )
         {
             // move the object on the Z
             c_auto objZ =
