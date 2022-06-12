@@ -29,10 +29,10 @@ public:
     {
         float       *pDest      {};
         size_t      sizL2       {8};
+        size_t      baseSizL2   {4};
         uint32_t    seed        {};
         float       sca         {1};
         float       rough       {0.5f};
-        size_t      baseSizL2   {4};
     };
 private:
     Params      mPar;
