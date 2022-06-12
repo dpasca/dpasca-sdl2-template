@@ -28,6 +28,9 @@ static constexpr float CAMERA_DIST      = HMAP_DISPW; // distance from center
 static constexpr float CAMERA_NEAR      = 0.01f;    // near plane (1 cm)
 static constexpr float CAMERA_FAR       = 1000.f;   // far plane (1000 m)
 
+static constexpr Float3 CHROM_LAND      { 0.8f , 0.7f , 0.0f }; // chrominance for land
+static constexpr Float3 CHROM_SEA       { 0.0f , 0.6f , 0.9f }; // chrominance for sea
+
 struct DemoParams
 {
     float CAMERA_FOV_DEG     = 65.f;    // field of view
@@ -111,6 +114,19 @@ inline void drawAtom( auto *pRend, const VertDev &vdev )
 }
 
 //==================================================================
+static ColType makeCol( float h, float dispH )
+{
+    c_auto lum = glm::mix( 40.f, 255.f, h );
+
+    // chrominance
+    c_auto chrom = dispH >= 0 ? CHROM_LAND : CHROM_SEA;
+
+    c_auto col = lum * chrom;
+
+    return { (uint8_t)col[0], (uint8_t)col[1], (uint8_t)col[2], 255 };
+}
+
+//==================================================================
 class HMap
 {
 public:
@@ -153,11 +169,10 @@ public:
                 c_auto dispH = glm::mix( mapDispMinH, mapDispMaxH, h );
 
                 VertObj vobj;
-                vobj.pos = {x, dispH, y};
+                // height goes no lower than 0 (simulate water)
+                vobj.pos = {x, std::max( dispH, 0.f ), y};
                 vobj.siz = dxdt;
-
-                c_auto lum = (uint8_t)glm::mix( 40.f, 255.f, h );
-                vobj.col = ColType{ lum, lum, lum, 255 };
+                vobj.col = makeCol( h, dispH );
 
                 // convert from object-space to device-space (2D display dimensions)
                 c_auto vout = makeDeviceVert( proj_obj, vobj, deviceW, deviceH );
