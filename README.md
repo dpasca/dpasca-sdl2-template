@@ -5,6 +5,7 @@
 | **Demo1**: A moving red rectangle ![](Docs/demo1_sshot.png) | **Demo2**: A 3D starfield (no *glm* for 3D) ![](Docs/demo2_sshot.png) |
 | **Demo3**: A wire-frame cube made of particles ![](Docs/demo3_sshot.png) | **Demo4**: A cube made with random particles ![](Docs/demo4_sshot.png) |
 | **Demo5**: A 2D rotating quad ![](Docs/demo5_sshot.png) | **Demo6**: A simple voxel scene ![](Docs/demo6_sshot.png) |
+| **Demo7**: A voxelized fractal terrain ![](Docs/demo7_sshot.png) | **Demo8**: ... |
 
 ## Required Tools
 - [Git](https://git-for-windows.github.io/) with Git Bash
