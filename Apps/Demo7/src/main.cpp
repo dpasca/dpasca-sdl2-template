@@ -13,16 +13,17 @@
 #include <vector>
 #include <algorithm> // for std::sort
 #include "MathBase.h"
+#include "Plasma2.h"
 
 #include "MinimalSDLApp.h"
 
 static bool ANIM_OBJ_POS        = true;
 
 //==================================================================
-static constexpr float HMAP_SIZL2       = 7;
+static constexpr size_t HMAP_SIZL2       = 7;
 static constexpr float HMAP_DISPW       = 10.f;
 static constexpr float HMAP_MIN_H       = -HMAP_DISPW / 15.f;
-static constexpr float HMAP_MAX_H       = -HMAP_DISPW / 10.f;
+static constexpr float HMAP_MAX_H       =  HMAP_DISPW / 10.f;
 
 static constexpr float CAMERA_DIST      = HMAP_DISPW; // distance from center
 static constexpr float CAMERA_FOV_DEG   = 70.f;     // field of view
@@ -143,7 +144,7 @@ public:
                 vobj.pos = {x, dispH, y};
                 vobj.siz = dxdt;
 
-                c_auto lum = (uint8_t)glm::mix( 100.f, 255.f, h );
+                c_auto lum = (uint8_t)glm::mix( 80.f, 255.f, h );
                 vobj.col = ColType{ lum, lum, lum, 255 };
 
                 // convert from object-space to device-space (2D display dimensions)
@@ -176,6 +177,19 @@ inline float DEG2RAD( float deg )
 //==================================================================
 static void hmap_Init( auto &hmap )
 {
+    Plasma2::Params par;
+    par.pDest       = hmap.mHeights.data();
+    par.sizL2       = hmap.mSizeL2;
+    par.seed        = 0x123abc;
+    par.rough       = 0.1f;
+    par.baseSizL2   = 3;
+
+    Plasma2 plasma( par );
+    while ( plasma.IterateRow() )
+    {
+    }
+
+    plasma.ScaleResults( 0.f, 1.f );
 }
 
 //==================================================================
@@ -224,9 +238,8 @@ int main( int argc, char *argv[] )
             world_obj = glm::translate( world_obj, Float3(0.0f, 0.0f, objZ) );
         }
 
-        // concatenate static rotation around the Z angle (1,0,0)
-        world_obj = glm::rotate( world_obj, DEG2RAD( 7.f ), Float3( 1, 0, 0 ) );
-        // concatenate rotation around the Y angle (0,1,0)
+        // rotate the object
+        world_obj = glm::rotate( world_obj, DEG2RAD( 15.f ), Float3( 1, 0, 0 ) );
         world_obj = glm::rotate( world_obj, objAngY, Float3( 0, 1, 0 ) );
 
         // --- CAMERA MATRIX ---
