@@ -20,9 +20,7 @@
 #include "MinimalSDLApp.h"
 
 //==================================================================
-static constexpr float HMAP_DISPW       = 10.f;
-static constexpr float HMAP_MIN_H       = -HMAP_DISPW / 15.f;
-static constexpr float HMAP_MAX_H       =  HMAP_DISPW / 10.f;
+static constexpr float TERR_DISPW       = 10.f;
 
 static constexpr float DISP_CAM_NEAR    = 0.01f;    // near plane (1 cm)
 static constexpr float DISP_CAM_FAR     = 1000.f;   // far plane (1000 m)
@@ -35,15 +33,18 @@ static const     Float3 LIGHT_DIR       { glm::normalize( Float3( 0.2f, 0.06f, 0
 struct DemoParams
 {
     float       DISP_CAM_FOV_DEG    = 65.f;       // field of view
-    float       DISP_CAM_DIST       = HMAP_DISPW; // distance from center
+    float       DISP_CAM_DIST       = TERR_DISPW; // distance from center
     Float2      DISP_CAM_PY_ANGS    = {20.f, 0.f};
     bool        DISP_ANIM_YAW       = true;
     uint32_t    DISP_CROP_WH[2]     = {0,0};
 
+    float       GEN_MIN_H           = -TERR_DISPW / 15.f;
+    float       GEN_MAX_H           =  TERR_DISPW / 10.f;
     uint32_t    GEN_SIZL2           = 7;       // 128 x 128 map
     uint32_t    GEN_STASIZL2        = 2;       // 4 x 4 initial random samples
     uint32_t    GEN_SEED            = 100;     // random seed
     float       GEN_ROUGH           = 0.5f;
+    bool        GEN_APPLY_SHADOWS   = true;
     bool        GEN_WRAP_EDGES      = false;
 };
 
@@ -139,6 +140,8 @@ public:
     size_t                  mSizeL2 {};
     std::vector<float>      mHeights;
     std::vector<ColType>    mCols;
+    float                   mMinH   {0};
+    float                   mMaxH   {1.5f};
 
     Terrain() {}
 
@@ -227,13 +230,14 @@ static void TERR_ScaleHeights( auto &terr, float newMin, float newMax )
         ma = std::max( ma, p[i] );
     }
 
-    if ( ma == mi )
-        return;
-
     // rescale and offset
-    c_auto scaToNew = (newMax - newMin) / (ma - mi);
+    c_auto scaToNew = (ma != mi) ? ((newMax - newMin) / (ma - mi)) : 0.f;
     for (size_t i=0; i < n; ++i)
         p[i] = newMin + (p[i] - mi) * scaToNew;
+
+    // update the terrain values
+    terr.mMinH = newMin;
+    terr.mMaxH = newMax;
 }
 
 //==================================================================
@@ -245,22 +249,22 @@ inline auto remapRange( c_auto &v, c_auto &srcL, c_auto &srcR, c_auto &desL, c_a
 
 //==================================================================
 // geenrate colors and flatten the heights below sea level
-static void TERR_Colorize( std::vector<float> &heights, std::vector<ColType> &cols )
+static void TERR_Colorize( auto &terr )
 {
-    cols.resize( heights.size() );
-    for (size_t i=0; i < heights.size(); ++i)
+    terr.mCols.resize( terr.mHeights.size() );
+    for (size_t i=0; i < terr.mHeights.size(); ++i)
     {
-        auto &h = heights[i];
+        auto &h = terr.mHeights[i];
 
         // chrominance
         c_auto chrom = h >= 0 ? CHROM_LAND : CHROM_SEA;
         // luminance from min-max range to a suitable range for coloring
-        c_auto lum = remapRange( h, HMAP_MIN_H, HMAP_MAX_H, 40.f, 255.f );
+        c_auto lum = remapRange( h, terr.mMinH, terr.mMaxH, 40.f, 255.f );
         // complete color is luminance by chrominance
         c_auto col = lum * chrom;
 
         // assign the color to the map
-        cols[i] = { (uint8_t)col[0], (uint8_t)col[1], (uint8_t)col[2], 255 };
+        terr.mCols[i] = { (uint8_t)col[0], (uint8_t)col[1], (uint8_t)col[2], 255 };
 
         // flatted to the height map at the sea level !
         h = std::max( h, 0.f );
@@ -274,8 +278,8 @@ static void TERR_CalcShadows( auto &terr, Float3 lightDirWS )
     auto checker = MU_ParallelOcclChecker(
                         terr.mHeights.data(),
                         lightDirWS,
-                        HMAP_MIN_H, // we know min and max since we rescaled
-                        HMAP_MAX_H,
+                        terr.mMinH,
+                        terr.mMaxH,
                         terr.mSizeL2 );
 
     c_auto dim = terr.GetDim();
@@ -315,7 +319,7 @@ static void TERR_MakeFromParams( auto &terr )
     }
 
     // transform heights to the required range
-    TERR_ScaleHeights( terr, HMAP_MIN_H, HMAP_MAX_H );
+    TERR_ScaleHeights( terr, _sPar.GEN_MIN_H, _sPar.GEN_MAX_H );
 
     // blend edges to make a continuous map
     if ( _sPar.GEN_WRAP_EDGES )
@@ -326,10 +330,11 @@ static void TERR_MakeFromParams( auto &terr )
     }
 
     // apply colors
-    TERR_Colorize( terr.mHeights, terr.mCols );
+    TERR_Colorize( terr );
 
     // apply shadow dimming
-    TERR_CalcShadows( terr, LIGHT_DIR );
+    if ( _sPar.GEN_APPLY_SHADOWS )
+        TERR_CalcShadows( terr, LIGHT_DIR );
 }
 
 #ifdef ENABLE_IMGUI
@@ -366,10 +371,13 @@ static void handleUI( size_t frameCnt, Terrain &terr )
         };
 
         bool rebuild = false;
+        rebuild |= ImGui::InputFloat( "Max Height", &_sPar.GEN_MAX_H, 0.01f, 0.1f );
+        rebuild |= ImGui::InputFloat( "Min Height", &_sPar.GEN_MIN_H, 0.01f, 0.1f );
         rebuild |= slideU32( "Size Log2", &_sPar.GEN_SIZL2, 0, 9 );
         rebuild |= slideU32( "Init Size Log2", &_sPar.GEN_STASIZL2, 0, _sPar.GEN_SIZL2 );
         rebuild |= ImGui::InputFloat( "Roughness", &_sPar.GEN_ROUGH, 0.01f, 0.1f );
         rebuild |= inputU32( "Seed", &_sPar.GEN_SEED, 1 );
+        rebuild |= ImGui::Checkbox( "Apply Shadows", &_sPar.GEN_APPLY_SHADOWS );
         rebuild |= ImGui::Checkbox( "Wrap Edges", &_sPar.GEN_WRAP_EDGES );
 
         if ( rebuild )
@@ -405,7 +413,7 @@ inline void debugDraw(
 
     SDL_SetRenderDrawColor( pRend, 0, 255, 0, 90 );
 
-    draw3DLine( Float3(0,0,0), LIGHT_DIR * HMAP_DISPW * 0.5f );
+    draw3DLine( Float3(0,0,0), LIGHT_DIR * TERR_DISPW * 0.5f );
 }
 
 //==================================================================
@@ -469,7 +477,7 @@ int main( int argc, char *argv[] )
 
         // draw the terrain
         terr.DrawTerrain(
-                HMAP_DISPW,
+                TERR_DISPW,
                 _sPar.DISP_CROP_WH,
                 pRend,
                 W,
