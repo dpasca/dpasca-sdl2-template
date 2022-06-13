@@ -46,7 +46,8 @@ struct DemoParams
 static DemoParams   _sPar;
 
 //==================================================================
-using ColType = std::array<uint8_t,4>;
+//using ColType = std::array<uint8_t,4>;
+using ColType = glm::vec<4, uint8_t, glm::defaultp>;
 
 // vertex coming from the object
 struct VertObj
@@ -116,24 +117,43 @@ inline void drawAtom( auto *pRend, const VertDev &vdev )
 }
 
 //==================================================================
-static ColType makeCol( float h, float dispH )
+inline auto remapRange( c_auto &v, c_auto &srcL, c_auto &srcR, c_auto &desL, c_auto &desR )
 {
-    c_auto lum = glm::mix( 40.f, 255.f, h );
+    c_auto t = (v - srcL) / (srcR - srcL);
+    return glm::mix( desL, desR, t );
+}
 
-    // chrominance
-    c_auto chrom = dispH >= 0 ? CHROM_LAND : CHROM_SEA;
+//==================================================================
+// geenrate colors and flatten the heights below sea level
+static void HMapColorize( std::vector<float> &heights, std::vector<ColType> &cols )
+{
+    cols.resize( heights.size() );
+    for (size_t i=0; i < heights.size(); ++i)
+    {
+        auto &h = heights[i];
 
-    c_auto col = lum * chrom;
+        // chrominance
+        c_auto chrom = h >= 0 ? CHROM_LAND : CHROM_SEA;
+        // luminance from min-max range to a suitable range for coloring
+        c_auto lum = remapRange( h, HMAP_MIN_H, HMAP_MAX_H, 40.f, 255.f );
+        // complete color is luminance by chrominance
+        c_auto col = lum * chrom;
 
-    return { (uint8_t)col[0], (uint8_t)col[1], (uint8_t)col[2], 255 };
+        // assign the color to the map
+        cols[i] = { (uint8_t)col[0], (uint8_t)col[1], (uint8_t)col[2], 255 };
+
+        // flatted to the height map at the sea level !
+        h = std::max( h, 0.f );
+    }
 }
 
 //==================================================================
 class HMap
 {
 public:
-    size_t              mSizeL2 {};
-    std::vector<float>  mHeights;
+    size_t                  mSizeL2 {};
+    std::vector<float>      mHeights;
+    std::vector<ColType>    mCols;
 
     HMap() {}
 
@@ -167,14 +187,10 @@ public:
             {
                 c_auto x = xoff + dxdt * (xi + 1);
 
-                c_auto h = mHeights[ cellIdx ];
-                c_auto dispH = glm::mix( mapDispMinH, mapDispMaxH, h );
-
                 VertObj vobj;
-                // height goes no lower than 0 (simulate water)
-                vobj.pos = {x, std::max( dispH, 0.f ), y};
+                vobj.pos = {x, mHeights[ cellIdx ], y};
                 vobj.siz = dxdt;
-                vobj.col = makeCol( h, dispH );
+                vobj.col = mCols[ cellIdx ];
 
                 // convert from object-space to device-space (2D display dimensions)
                 c_auto vout = makeDeviceVert( proj_obj, vobj, deviceW, deviceH );
@@ -223,14 +239,19 @@ static void hmap_MakeFromParams( auto &hmap )
     {
     }
 
-    // normalize the height values from 0.0 to 1.0
-    plasma.ScaleResults( 0.f, 1.f );
+    // transform heights to the required range
+    plasma.ScaleResults( HMAP_MIN_H, HMAP_MAX_H );
 
     // blend edges to make a continuous map
     if ( _sPar.WRAPPED_EDGES )
-        WrapMap<float,1>( hmap.mHeights.data(),              // data
-                          hmap.mSizeL2,                      // log2 size
-                          ((size_t)1 << hmap.mSizeL2) / 3 ); // length to wrap
+    {
+        // we wrap by cross-blending the extreme 1/3 of the samples at the edges
+        c_auto wrapSiz = ((size_t)1 << hmap.mSizeL2) / 3;
+        WrapMap<float,1>( hmap.mHeights.data(), hmap.mSizeL2, wrapSiz );
+    }
+
+    //
+    HMapColorize( hmap.mHeights, hmap.mCols );
 }
 
 #ifdef ENABLE_IMGUI
