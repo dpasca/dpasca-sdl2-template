@@ -15,8 +15,8 @@
 #include "DBase.h"
 #include "MathBase.h"
 #include "Plasma2.h"
-#include "WrapMap.h"
-#include "HMapParallelOcclChecker.h"
+#include "MU_WrapMap.h"
+#include "MU_ParallelOcclChecker.h"
 #include "MinimalSDLApp.h"
 
 //==================================================================
@@ -153,8 +153,6 @@ public:
 
     void DrawHMap(
             float mapDispW,
-            float mapDispMinH,
-            float mapDispMaxH,
             auto *pRend,
             float deviceW,
             float deviceH,
@@ -259,7 +257,7 @@ static void HMapColorize( std::vector<float> &heights, std::vector<ColType> &col
 // geenrate colors and flatten the heights below sea level
 static void HMapCalcShadows( auto &hmap, Float3 lightDirWS )
 {
-    auto checker = HMapParallelOcclChecker(
+    auto checker = MU_ParallelOcclChecker(
                         hmap.mHeights.data(),
                         lightDirWS,
                         HMAP_MIN_H, // we know min and max since we rescaled
@@ -310,7 +308,7 @@ static void hmap_MakeFromParams( auto &hmap )
     {
         // we wrap by cross-blending the extreme 1/3 of the samples at the edges
         c_auto wrapSiz = ((size_t)1 << hmap.mSizeL2) / 3;
-        WrapMap<float,1>( hmap.mHeights.data(), hmap.mSizeL2, wrapSiz );
+        MU_WrapMap<float,1>( hmap.mHeights.data(), hmap.mSizeL2, wrapSiz );
     }
 
     // apply colors
@@ -454,8 +452,6 @@ int main( int argc, char *argv[] )
         // draw the voxel
         hmap.DrawHMap(
                 HMAP_DISPW,
-                HMAP_MIN_H,
-                HMAP_MAX_H,
                 pRend,
                 W,
                 H,

@@ -1,20 +1,20 @@
 //==================================================================
-/// HMapParallelOcclChecker.h
+/// MU_ParallelOcclChecker.h
 ///
 /// Created by Davide Pasca - 2022/06/13
 /// See the file "license.txt" that comes with this project for
 /// copyright info.
 //==================================================================
 
-#ifndef HMAPPARALLELOCCLCHECKER_H
-#define HMAPPARALLELOCCLCHECKER_H
+#ifndef MU_PARALLELOCCLCHECKER_H
+#define MU_PARALLELOCCLCHECKER_H
 
 #include <cstdlib>
 #include <cmath>
 #include "DBase.h"
 
 //==================================================================
-class HMapParallelOcclChecker
+class MU_ParallelOcclChecker
 {
 public:
     const float *mpMap  {};
@@ -30,7 +30,7 @@ public:
     float       mOo_d1n {};
 
     //==================================================================
-    HMapParallelOcclChecker(
+    MU_ParallelOcclChecker(
         const float *pMap,
         Float3 lightDirWS,
         float minY,

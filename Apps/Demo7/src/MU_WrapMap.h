@@ -1,19 +1,19 @@
 //==================================================================
-/// WrapMap.h
+/// MU_WrapMap.h
 ///
 /// Created by Davide Pasca - 2022/06/13
 /// See the file "license.txt" that comes with this project for
 /// copyright info.
 //==================================================================
 
-#ifndef WRAPMAP_H
-#define WRAPMAP_H
+#ifndef MU_WRAPMAP_H
+#define MU_WRAPMAP_H
 
 #include "MathBase.h"
 
 //==================================================================
 template <class _T, size_t CHANS_N>
-void WrapMap( _T *pMap, size_t dimL2, size_t wrapHDim )
+void MU_WrapMap( _T *pMap, size_t dimL2, size_t wrapHDim )
 {
     assert( wrapHDim >= 1 && wrapHDim <= ((1U << dimL2)/2) );
 
