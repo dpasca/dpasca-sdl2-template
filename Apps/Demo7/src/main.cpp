@@ -24,9 +24,8 @@ static constexpr float HMAP_DISPW       = 10.f;
 static constexpr float HMAP_MIN_H       = -HMAP_DISPW / 15.f;
 static constexpr float HMAP_MAX_H       =  HMAP_DISPW / 10.f;
 
-static constexpr float CAMERA_DIST      = HMAP_DISPW; // distance from center
-static constexpr float CAMERA_NEAR      = 0.01f;    // near plane (1 cm)
-static constexpr float CAMERA_FAR       = 1000.f;   // far plane (1000 m)
+static constexpr float DISP_CAM_NEAR    = 0.01f;    // near plane (1 cm)
+static constexpr float DISP_CAM_FAR     = 1000.f;   // far plane (1000 m)
 
 static constexpr Float3 CHROM_LAND      { 0.8f , 0.7f , 0.0f }; // chrominance for land
 static constexpr Float3 CHROM_SEA       { 0.0f , 0.6f , 0.9f }; // chrominance for sea
@@ -35,15 +34,16 @@ static const     Float3 LIGHT_DIR       { glm::normalize( Float3( 0.2f, 0.06f, 0
 
 struct DemoParams
 {
-    bool     ANIM_OBJ_POS    = false;
-    float    CAMERA_FOV_DEG  = 65.f;    // field of view
+    float       DISP_CAM_FOV_DEG    = 65.f;       // field of view
+    float       DISP_CAM_DIST       = HMAP_DISPW; // distance from center
+    Float2      DISP_CAM_PY_ANGS    = {20.f, 0.f};
+    bool        DISP_ANIM_YAW       = true;
 
-    uint32_t PLASMA_SIZL2    = 7;       // 128 x 128 map
-    uint32_t PLASMA_STASIZL2 = 2;       // 4 x 4 initial random samples
-    uint32_t PLASMA_SEED     = 100;     // random seed
-    float    PLASMA_ROUGH    = 0.5f;
-
-    bool     WRAPPED_EDGES   = false;
+    uint32_t    GEN_SIZL2           = 7;       // 128 x 128 map
+    uint32_t    GEN_STASIZL2        = 2;       // 4 x 4 initial random samples
+    uint32_t    GEN_SEED            = 100;     // random seed
+    float       GEN_ROUGH           = 0.5f;
+    bool        GEN_WRAP_EDGES      = false;
 };
 
 static DemoParams   _sPar;
@@ -85,14 +85,14 @@ inline VertDev makeDeviceVert(
     VertDev vdev;
 
     // homogeneus coordinates (-w..w)
-    const auto posH = xform * glm::vec4( vobj.pos, 1.f );
+    c_auto posH = xform * glm::vec4( vobj.pos, 1.f );
 
     if ( posH[2] <= 0 ) // skip if it's behind the camera
         return vdev;
 
     // convert to screen-space, meaning that anything visible is
     // in the range -1..1 for x,y and 0..1 for z
-    const auto oow = 1.f / posH.w;
+    c_auto oow = 1.f / posH.w;
 
     vdev.pos[0] = deviceW * (posH[0] * oow + 1) * 0.5f;
     vdev.pos[1] = deviceH * (1 - posH[1] * oow) * 0.5f;
@@ -196,7 +196,7 @@ public:
         });
 
         // finally render the verts
-        for (const auto &v : vertsDev)
+        for (c_auto &v : vertsDev)
             drawAtom( pRend, v );
     }
 };
@@ -277,9 +277,6 @@ static void HMapCalcShadows( auto &hmap, Float3 lightDirWS )
                 c[0] /= 2; // make half bright
                 c[1] /= 2;
                 c[2] /= 2;
-                //c[0] = 255;
-                //c[1] = 0;
-                //c[2] = 255;
             }
 		}
 	}
@@ -289,15 +286,15 @@ static void HMapCalcShadows( auto &hmap, Float3 lightDirWS )
 static void hmap_MakeFromParams( auto &hmap )
 {
     // allocate a new map
-    hmap = HMap( _sPar.PLASMA_SIZL2 );
+    hmap = HMap( _sPar.GEN_SIZL2 );
 
     // fill it with "plasma"
     Plasma2::Params par;
     par.pDest       = hmap.mHeights.data(); // destination values
     par.sizL2       = hmap.mSizeL2;         // log2 of size (i.e. 7 = 128 pixels width/height)
-    par.baseSizL2   = _sPar.PLASMA_STASIZL2;// log2 of size of initial low res map
-    par.seed        = _sPar.PLASMA_SEED;
-    par.rough       = _sPar.PLASMA_ROUGH;
+    par.baseSizL2   = _sPar.GEN_STASIZL2;// log2 of size of initial low res map
+    par.seed        = _sPar.GEN_SEED;
+    par.rough       = _sPar.GEN_ROUGH;
 
     // generate the map
     Plasma2 plasma( par );
@@ -309,7 +306,7 @@ static void hmap_MakeFromParams( auto &hmap )
     HMapScaleHeights( hmap, HMAP_MIN_H, HMAP_MAX_H );
 
     // blend edges to make a continuous map
-    if ( _sPar.WRAPPED_EDGES )
+    if ( _sPar.GEN_WRAP_EDGES )
     {
         // we wrap by cross-blending the extreme 1/3 of the samples at the edges
         c_auto wrapSiz = ((size_t)1 << hmap.mSizeL2) / 3;
@@ -327,35 +324,45 @@ static void hmap_MakeFromParams( auto &hmap )
 //==================================================================
 static void handleUI( size_t frameCnt, HMap &hmap )
 {
-    ImGui::Text( "Frame: %zu", frameCnt );
-    ImGui::Checkbox( "Animate obj position", &_sPar.ANIM_OBJ_POS );
+    //ImGui::Text( "Frame: %zu", frameCnt );
 
-    ImGui::InputFloat( "Camera FOV", &_sPar.CAMERA_FOV_DEG, 0.5f, 0.10f );
-    _sPar.CAMERA_FOV_DEG = std::clamp( _sPar.CAMERA_FOV_DEG, 10.f, 120.f );
-
-    ImGui::NewLine();
-
-    auto inputU32 = []( c_auto *pName, uint32_t *pVal, uint32_t step )
+    auto header = []( c_auto *pName )
     {
-        return ImGui::InputScalar( pName, ImGuiDataType_S32, pVal, &step, nullptr, "%d" );
+        return ImGui::CollapsingHeader( pName, ImGuiTreeNodeFlags_DefaultOpen );
     };
 
-    bool rebuild = false;
-    rebuild |= inputU32( "Size Log2", &_sPar.PLASMA_SIZL2, 1 );
-    rebuild |= inputU32( "Init Size Log2", &_sPar.PLASMA_STASIZL2, 1 );
-    rebuild |= ImGui::InputFloat( "Roughness", &_sPar.PLASMA_ROUGH, 0.01f, 0.1f );
-    rebuild |= inputU32( "Seed", &_sPar.PLASMA_SEED, 1 );
-    rebuild |= ImGui::Checkbox( "Wrap Edges", &_sPar.WRAPPED_EDGES );
-
-    if ( rebuild )
+    if ( header( "Display" ) )
     {
-        _sPar.PLASMA_SIZL2    = std::clamp( _sPar.PLASMA_SIZL2, (uint32_t)0, (uint32_t)9 );
-        _sPar.PLASMA_STASIZL2 = std::clamp( _sPar.PLASMA_STASIZL2,
-                                                        (uint32_t)0, _sPar.PLASMA_SIZL2 );
+        ImGui::SliderFloat( "Camera FOV", &_sPar.DISP_CAM_FOV_DEG, 10.f, 120.f );
+        ImGui::SliderFloat( "Camera Dist", &_sPar.DISP_CAM_DIST, 0.f, DISP_CAM_FAR/10 );
+        ImGui::SliderFloat2( "Camera Pitch/Yaw", &_sPar.DISP_CAM_PY_ANGS[0], -180, 180 );
 
-        _sPar.PLASMA_ROUGH    = std::clamp( _sPar.PLASMA_ROUGH, 0.f, 1.f );
+        ImGui::Checkbox( "Anim Yaw", &_sPar.DISP_ANIM_YAW );
+    }
 
-        hmap_MakeFromParams( hmap );
+    if ( header( "Generation" ) )
+    {
+        auto inputU32 = []( c_auto *pName, uint32_t *pVal, uint32_t step )
+        {
+            return ImGui::InputScalar( pName, ImGuiDataType_S32, pVal, &step, nullptr, "%d" );
+        };
+
+        bool rebuild = false;
+        rebuild |= inputU32( "Size Log2", &_sPar.GEN_SIZL2, 1 );
+        rebuild |= inputU32( "Init Size Log2", &_sPar.GEN_STASIZL2, 1 );
+        rebuild |= ImGui::InputFloat( "Roughness", &_sPar.GEN_ROUGH, 0.01f, 0.1f );
+        rebuild |= inputU32( "Seed", &_sPar.GEN_SEED, 1 );
+        rebuild |= ImGui::Checkbox( "Wrap Edges", &_sPar.GEN_WRAP_EDGES );
+
+        if ( rebuild )
+        {
+            _sPar.GEN_SIZL2    = std::clamp( _sPar.GEN_SIZL2, (uint32_t)0, (uint32_t)9 );
+            _sPar.GEN_STASIZL2 = std::clamp( _sPar.GEN_STASIZL2, (uint32_t)0, _sPar.GEN_SIZL2 );
+
+            _sPar.GEN_ROUGH    = std::clamp( _sPar.GEN_ROUGH, 0.f, 1.f );
+
+            hmap_MakeFromParams( hmap );
+        }
     }
 }
 #endif
@@ -413,41 +420,36 @@ int main( int argc, char *argv[] )
         SDL_SetRenderDrawColor( pRend, 0, 0, 0, 0 );
         SDL_RenderClear( pRend );
 
-        // --- OBJECT MATRIX ---
-        const auto objAngY = (float)((double)frameCnt / 200.0); // in radiants
-        // start with identity matrix
-        auto world_obj = Matrix44( 1.f );
-
-        if ( _sPar.ANIM_OBJ_POS )
+        // animate
+        if ( _sPar.DISP_ANIM_YAW )
         {
-            // move the object on the Z
-            c_auto objZ =
-                CAMERA_DIST/2 * glm::mix( -0.3f, 0.5f, ((sin( frameCnt / 250.0 )+1)/2) );
-
-            world_obj = glm::translate( world_obj, Float3(0.0f, 0.0f, objZ) );
+            // increase and wrap
+            _sPar.DISP_CAM_PY_ANGS[1] += 0.5f;
+            _sPar.DISP_CAM_PY_ANGS[1] = fmodf( _sPar.DISP_CAM_PY_ANGS[1]+180, 360.f ) - 180;
         }
 
-        // rotate the object
-        world_obj = glm::rotate( world_obj, DEG2RAD( 15.f ), Float3( 1, 0, 0 ) );
-        world_obj = glm::rotate( world_obj, objAngY, Float3( 0, 1, 0 ) );
+        // obj -> world matrix
+        auto world_obj = Matrix44( 1.f );
 
-        // --- CAMERA MATRIX ---
-        // start with identity matrix
-        auto camera_world = Matrix44( 1.f );
-        // concatenate translation on the Z
-        camera_world = glm::translate( camera_world, Float3(0.0f, 0.0f, -CAMERA_DIST) );
+        // camera -> world matrix
+        auto cam_world = [&]()
+        {
+            auto m = Matrix44( 1.f );
+            m = glm::translate( m, Float3(0.0f, 0.0f, -_sPar.DISP_CAM_DIST) );
+            m = glm::rotate( m, DEG2RAD(_sPar.DISP_CAM_PY_ANGS[0]), Float3(1, 0, 0) );
+            m = glm::rotate( m, DEG2RAD(_sPar.DISP_CAM_PY_ANGS[1]), Float3(0, 1, 0) );
+            return m;
+        }();
 
-        // --- PROJECTION MATRIX ---
-        // camera -> projection
-        const auto proj_camera = glm::perspective(
-                                    DEG2RAD( _sPar.CAMERA_FOV_DEG ),  // FOV
-                                    (float)W / H,               // aspect ratio
-                                    CAMERA_NEAR,
-                                    CAMERA_FAR );
+        // camera -> projection matrix
+        c_auto proj_camera = glm::perspective(
+                                DEG2RAD( _sPar.DISP_CAM_FOV_DEG ),  // FOV
+                                (float)W / H,                       // aspect ratio
+                                DISP_CAM_NEAR,
+                                DISP_CAM_FAR );
 
-        // --- FINAL MATRIX ---
-        // transforming obj -> projection
-        const auto proj_obj = proj_camera * camera_world * world_obj;
+        // obj -> proj matrix
+        c_auto proj_obj = proj_camera * cam_world * world_obj;
 
         // draw the voxel
         hmap.DrawHMap(
