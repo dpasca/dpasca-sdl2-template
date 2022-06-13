@@ -380,26 +380,3 @@ bool Plasma2::IterateRow()
     return true;
 }
 
-//==================================================================
-void Plasma2::ScaleResults( float newMin, float newMax ) const
-{
-    auto *p = mPar.pDest;
-    c_auto n = (size_t)1 << ((int)mPar.sizL2 * 2);
-
-    float mi =  FLT_MAX;
-    float ma = -FLT_MAX;
-    for (size_t i=0; i < n; ++i)
-    {
-        mi = std::min( mi, p[i] );
-        ma = std::max( ma, p[i] );
-    }
-
-    if ( ma == mi )
-        return;
-
-    // rescale and offset
-    c_auto scaToNew = (newMax - newMin) / (ma - mi);
-    for (size_t i=0; i < n; ++i)
-        p[i] = newMin + (p[i] - mi) * scaToNew;
-}
-

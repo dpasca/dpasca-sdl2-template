@@ -16,6 +16,7 @@
 #include "MathBase.h"
 #include "Plasma2.h"
 #include "WrapMap.h"
+#include "HMapParallelOcclChecker.h"
 #include "MinimalSDLApp.h"
 
 //==================================================================
@@ -29,6 +30,8 @@ static constexpr float CAMERA_FAR       = 1000.f;   // far plane (1000 m)
 
 static constexpr Float3 CHROM_LAND      { 0.8f , 0.7f , 0.0f }; // chrominance for land
 static constexpr Float3 CHROM_SEA       { 0.0f , 0.6f , 0.9f }; // chrominance for sea
+
+static const     Float3 LIGHT_DIR       { glm::normalize( Float3( 0.2f, 0.06f, 0.2f ) ) };
 
 struct DemoParams
 {
@@ -45,10 +48,18 @@ struct DemoParams
 
 static DemoParams   _sPar;
 
-//==================================================================
-//using ColType = std::array<uint8_t,4>;
+//
 using ColType = glm::vec<4, uint8_t, glm::defaultp>;
 
+//==================================================================
+inline float DEG2RAD( float deg )
+{
+    return glm::pi<float>() / 180.f * deg;
+}
+
+//==================================================================
+//=== Rendering
+//==================================================================
 // vertex coming from the object
 struct VertObj
 {
@@ -117,35 +128,8 @@ inline void drawAtom( auto *pRend, const VertDev &vdev )
 }
 
 //==================================================================
-inline auto remapRange( c_auto &v, c_auto &srcL, c_auto &srcR, c_auto &desL, c_auto &desR )
-{
-    c_auto t = (v - srcL) / (srcR - srcL);
-    return glm::mix( desL, desR, t );
-}
-
+//=== Generation
 //==================================================================
-// geenrate colors and flatten the heights below sea level
-static void HMapColorize( std::vector<float> &heights, std::vector<ColType> &cols )
-{
-    cols.resize( heights.size() );
-    for (size_t i=0; i < heights.size(); ++i)
-    {
-        auto &h = heights[i];
-
-        // chrominance
-        c_auto chrom = h >= 0 ? CHROM_LAND : CHROM_SEA;
-        // luminance from min-max range to a suitable range for coloring
-        c_auto lum = remapRange( h, HMAP_MIN_H, HMAP_MAX_H, 40.f, 255.f );
-        // complete color is luminance by chrominance
-        c_auto col = lum * chrom;
-
-        // assign the color to the map
-        cols[i] = { (uint8_t)col[0], (uint8_t)col[1], (uint8_t)col[2], 255 };
-
-        // flatted to the height map at the sea level !
-        h = std::max( h, 0.f );
-    }
-}
 
 //==================================================================
 class HMap
@@ -162,6 +146,10 @@ public:
         , mHeights( (size_t)1 << ((int)sizeL2 * 2) )
     {
     }
+
+    size_t GetDim() const { return (size_t)1 << mSizeL2; }
+
+    size_t MakeIndexXY( size_t x, size_t y ) const { return x + (y << mSizeL2); }
 
     void DrawHMap(
             float mapDispW,
@@ -214,9 +202,87 @@ public:
 };
 
 //==================================================================
-inline float DEG2RAD( float deg )
+static void HMapScaleHeights( auto &hmap, float newMin, float newMax )
 {
-    return glm::pi<float>() / 180.f * deg;
+    auto *p = hmap.mHeights.data();
+    c_auto n = (size_t)1 << ((int)hmap.mSizeL2 * 2);
+
+    float mi =  FLT_MAX;
+    float ma = -FLT_MAX;
+    for (size_t i=0; i < n; ++i)
+    {
+        mi = std::min( mi, p[i] );
+        ma = std::max( ma, p[i] );
+    }
+
+    if ( ma == mi )
+        return;
+
+    // rescale and offset
+    c_auto scaToNew = (newMax - newMin) / (ma - mi);
+    for (size_t i=0; i < n; ++i)
+        p[i] = newMin + (p[i] - mi) * scaToNew;
+}
+
+//==================================================================
+inline auto remapRange( c_auto &v, c_auto &srcL, c_auto &srcR, c_auto &desL, c_auto &desR )
+{
+    c_auto t = (v - srcL) / (srcR - srcL);
+    return glm::mix( desL, desR, t );
+}
+
+//==================================================================
+// geenrate colors and flatten the heights below sea level
+static void HMapColorize( std::vector<float> &heights, std::vector<ColType> &cols )
+{
+    cols.resize( heights.size() );
+    for (size_t i=0; i < heights.size(); ++i)
+    {
+        auto &h = heights[i];
+
+        // chrominance
+        c_auto chrom = h >= 0 ? CHROM_LAND : CHROM_SEA;
+        // luminance from min-max range to a suitable range for coloring
+        c_auto lum = remapRange( h, HMAP_MIN_H, HMAP_MAX_H, 40.f, 255.f );
+        // complete color is luminance by chrominance
+        c_auto col = lum * chrom;
+
+        // assign the color to the map
+        cols[i] = { (uint8_t)col[0], (uint8_t)col[1], (uint8_t)col[2], 255 };
+
+        // flatted to the height map at the sea level !
+        h = std::max( h, 0.f );
+    }
+}
+
+//==================================================================
+// geenrate colors and flatten the heights below sea level
+static void HMapCalcShadows( auto &hmap, Float3 lightDirWS )
+{
+    auto checker = HMapParallelOcclChecker(
+                        hmap.mHeights.data(),
+                        lightDirWS,
+                        HMAP_MIN_H, // we know min and max since we rescaled
+                        HMAP_MAX_H,
+                        hmap.mSizeL2 );
+
+    c_auto dim = hmap.GetDim();
+	for (size_t yi=0; yi < dim; ++yi)
+	{
+        for (size_t xi=0; xi < dim; ++xi)
+		{
+			if ( checker.IsOccludedAtPoint( (int)xi, (int)yi ) )
+            {
+                auto &c = hmap.mCols[ hmap.MakeIndexXY( xi, yi ) ];
+                c[0] /= 2; // make half bright
+                c[1] /= 2;
+                c[2] /= 2;
+                //c[0] = 255;
+                //c[1] = 0;
+                //c[2] = 255;
+            }
+		}
+	}
 }
 
 //==================================================================
@@ -240,7 +306,7 @@ static void hmap_MakeFromParams( auto &hmap )
     }
 
     // transform heights to the required range
-    plasma.ScaleResults( HMAP_MIN_H, HMAP_MAX_H );
+    HMapScaleHeights( hmap, HMAP_MIN_H, HMAP_MAX_H );
 
     // blend edges to make a continuous map
     if ( _sPar.WRAPPED_EDGES )
@@ -250,8 +316,11 @@ static void hmap_MakeFromParams( auto &hmap )
         WrapMap<float,1>( hmap.mHeights.data(), hmap.mSizeL2, wrapSiz );
     }
 
-    //
+    // apply colors
     HMapColorize( hmap.mHeights, hmap.mCols );
+
+    // apply shadow dimming
+    HMapCalcShadows( hmap, LIGHT_DIR );
 }
 
 #ifdef ENABLE_IMGUI
@@ -292,10 +361,35 @@ static void handleUI( size_t frameCnt, HMap &hmap )
 #endif
 
 //==================================================================
+inline void debugDraw(
+                auto *pRend,
+                float deviceW,
+                float deviceH,
+                const Matrix44 &proj_obj )
+{
+    auto draw3DLine = [&]( const Float3 &pos1, const Float3 &pos2 )
+    {
+        // convert from object-space to device-space (2D display dimensions)
+        c_auto v1 = makeDeviceVert( proj_obj, VertObj{pos1}, deviceW, deviceH );
+        c_auto v2 = makeDeviceVert( proj_obj, VertObj{pos2}, deviceW, deviceH );
+
+        c_auto v1p = v1.pos;
+        c_auto v2p = v2.pos;
+
+        if ( v1p[2] > 0 && v2p[2] > 0 )
+            SDL_RenderDrawLineF( pRend, v1p[0], v1p[1], v2p[0], v2p[1] );
+    };
+
+    SDL_SetRenderDrawColor( pRend, 0, 255, 0, 90 );
+
+    draw3DLine( Float3(0,0,0), LIGHT_DIR * HMAP_DISPW * 0.5f );
+}
+
+//==================================================================
 int main( int argc, char *argv[] )
 {
-    constexpr int  W = 800;
-    constexpr int  H = 600;
+    constexpr int  W = 1024;
+    constexpr int  H = 768;
 
     MinimalSDLApp app( argc, argv, W, H );
 
@@ -364,6 +458,9 @@ int main( int argc, char *argv[] )
                 W,
                 H,
                 proj_obj );
+
+        //
+        //debugDraw( pRend, W, H, proj_obj );
 
         // end of the frame (will present)
         app.EndFrame();
