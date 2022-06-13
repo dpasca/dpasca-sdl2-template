@@ -266,9 +266,9 @@ void MinimalSDLApp::DrawMainUIWin( const std::function<void ()> &fn )
         return;
 
     ImGui::SetNextWindowPos( {4,4}, ImGuiCond_Once );
-    if ( ImGui::Begin( "Main Win", &mShowMainUIWin, ImGuiWindowFlags_AlwaysAutoResize ) )
+    if ( ImGui::Begin( "Main Win (F2: Show/hide)",
+                            &mShowMainUIWin, ImGuiWindowFlags_AlwaysAutoResize ) )
     {
-        ImGui::Text( "F2: Show/hide UI" );
         fn();
     }
     ImGui::End();
