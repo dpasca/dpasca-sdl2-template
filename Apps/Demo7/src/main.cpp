@@ -12,9 +12,10 @@
 #include <array>
 #include <vector>
 #include <algorithm> // for std::sort
+#include "DBase.h"
 #include "MathBase.h"
 #include "Plasma2.h"
-
+#include "WrapMap.h"
 #include "MinimalSDLApp.h"
 
 //==================================================================
@@ -203,72 +204,6 @@ inline float DEG2RAD( float deg )
 }
 
 //==================================================================
-template <class _T, size_t CHANS_N>
-void wrapMap( _T *pMap, size_t dimL2, size_t wrapHDim )
-{
-    assert( wrapHDim >= 1 && wrapHDim <= ((1U << dimL2)/2) );
-
-    auto cosLerpCoe = []( float a )
-    {
-        return (1.0f - cosf(a * (float)M_PI)) * 0.5f;
-    };
-
-	int	dim = 1 << dimL2;
-
-	for (int i=0; i < (int)wrapHDim; ++i)
-	{
-		float t1 = cosLerpCoe( 0.5f + 0.5f * (float)i / wrapHDim );
-		float t2 = cosLerpCoe( 0.5f + 0.5f * (float)(i+1) / (wrapHDim + 1) );
-
-		int	i1 = i;
-		int	i2 = dim-1 - i;
-
-		// rows
-		int	row1 = i1 << dimL2;
-		int	row2 = i2 << dimL2;
-		for (int j=0; j < dim; ++j)
-		{
-			int	j1 = j + row1;
-			int	j2 = j + row2;
-			for (int k=0; k < (int)CHANS_N; ++k)
-			{
-				int	jj1 = j1 * CHANS_N + k;
-				int	jj2 = j2 * CHANS_N + k;
-				_T val1 = pMap[ jj1 ];
-				_T val2 = pMap[ jj2 ];
-				pMap[ jj1 ] = (_T)glm::mix( val2, val1, t1 );
-				pMap[ jj2 ] = (_T)glm::mix( val1, val2, t2 );
-			}
-		}
-	}
-
-	for (int i=0; i < (int)wrapHDim; ++i)
-	{
-		float t1 = cosLerpCoe( 0.5f + 0.5f * (float)i / wrapHDim );
-		float t2 = cosLerpCoe( 0.5f + 0.5f * (float)(i+1) / (wrapHDim + 1) );
-
-		int	i1 = i;
-		int	i2 = dim-1 - i;
-
-		// cols
-		for (int j=0; j < dim; ++j)
-		{
-			int	j1 = i1 + (j << dimL2);
-			int	j2 = i2 + (j << dimL2);
-			for (int k=0; k < (int)CHANS_N; ++k)
-			{
-				int	jj1 = j1 * CHANS_N + k;
-				int	jj2 = j2 * CHANS_N + k;
-				_T val1 = pMap[ jj1 ];
-				_T val2 = pMap[ jj2 ];
-				pMap[ jj1 ] = (_T)glm::mix( val2, val1, t1 );
-				pMap[ jj2 ] = (_T)glm::mix( val1, val2, t2 );
-			}
-		}
-	}
-}
-
-//==================================================================
 static void hmap_MakeFromParams( auto &hmap )
 {
     // allocate a new map
@@ -293,7 +228,7 @@ static void hmap_MakeFromParams( auto &hmap )
 
     // blend edges to make a continuous map
     if ( _sPar.WRAPPED_EDGES )
-        wrapMap<float,1>( hmap.mHeights.data(),              // data
+        WrapMap<float,1>( hmap.mHeights.data(),              // data
                           hmap.mSizeL2,                      // log2 size
                           ((size_t)1 << hmap.mSizeL2) / 3 ); // length to wrap
 }

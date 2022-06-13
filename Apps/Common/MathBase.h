@@ -9,6 +9,13 @@
 #ifndef MATHBASE_H
 #define MATHBASE_H
 
+#define _USE_MATH_DEFINES
+#include <math.h>
+#include <cmath>
+#include <cfloat>
+
+inline constexpr auto FM_PI = (float)M_PI;
+
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
@@ -22,15 +29,8 @@ using Int3 = glm::ivec3;
 
 using Matrix44 = glm::mat4;
 
-#ifndef c_auto
-# define c_auto const auto
-#endif
-#ifndef NOT
-# define NOT(X) (!(X))
-#endif
-
 //==================================================================
-inline auto lengthSqr = []( c_auto &v ) { return glm::dot( v, v ); };
+inline auto lengthSqr = []( const auto &v ) { return glm::dot( v, v ); };
 
 #endif
 

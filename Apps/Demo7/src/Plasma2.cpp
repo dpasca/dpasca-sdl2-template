@@ -7,18 +7,10 @@
 //==================================================================
 
 #include <random>
-#define _USE_MATH_DEFINES
-#include <math.h>
-#include <cmath>
-#include <cfloat>
 #include <assert.h>
+#include "DBase.h"
+#include "MathBase.h"
 #include "Plasma2.h"
-
-#ifndef c_auto
-# define c_auto const auto
-#endif
-
-inline constexpr auto FM_PI = (float)M_PI;
 
 //==================================================================
 class Rand2D

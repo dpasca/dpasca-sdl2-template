@@ -12,6 +12,7 @@
 #include <array>
 #include <vector>
 #include <algorithm> // for std::sort
+#include "DBase.h"
 #include "MathBase.h"
 #include "Voxels.h"
 #include "VoxelsGen.h"
