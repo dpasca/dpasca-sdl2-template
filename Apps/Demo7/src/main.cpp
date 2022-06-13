@@ -38,6 +38,7 @@ struct DemoParams
     float       DISP_CAM_DIST       = HMAP_DISPW; // distance from center
     Float2      DISP_CAM_PY_ANGS    = {20.f, 0.f};
     bool        DISP_ANIM_YAW       = true;
+    uint32_t    DISP_CROP_WH[2]     = {0,0};
 
     uint32_t    GEN_SIZL2           = 7;       // 128 x 128 map
     uint32_t    GEN_STASIZL2        = 2;       // 4 x 4 initial random samples
@@ -132,16 +133,16 @@ inline void drawAtom( auto *pRend, const VertDev &vdev )
 //==================================================================
 
 //==================================================================
-class HMap
+class Terrain
 {
 public:
     size_t                  mSizeL2 {};
     std::vector<float>      mHeights;
     std::vector<ColType>    mCols;
 
-    HMap() {}
+    Terrain() {}
 
-    HMap( size_t sizeL2 )
+    Terrain( size_t sizeL2 )
         : mSizeL2(sizeL2)
         , mHeights( (size_t)1 << ((int)sizeL2 * 2) )
     {
@@ -151,32 +152,45 @@ public:
 
     size_t MakeIndexXY( size_t x, size_t y ) const { return x + (y << mSizeL2); }
 
-    void DrawHMap(
+    void DrawTerrain(
             float mapDispW,
+            const uint32_t cropWH[2],
             auto *pRend,
             float deviceW,
             float deviceH,
             const Matrix44 &proj_obj ) const
     {
-        std::vector<VertDev> vertsDev;
-
-        c_auto dim = 1 << mSizeL2;
+        c_auto dim = (size_t)1 << mSizeL2;
 
         c_auto dxdt = mapDispW / (float)dim;
         c_auto xoff = -mapDispW / 2;
 
+        // define the usable crop area (all if 0, otherwise no larger than the map's dim)
+        c_auto useCropW = cropWH[0] ? std::min( (size_t)cropWH[0], dim ) : dim;
+        c_auto useCropH = cropWH[1] ? std::min( (size_t)cropWH[1], dim ) : dim;
+
+        c_auto xi1 = (dim - useCropW) / 2;
+        c_auto xi2 = (dim + useCropW) / 2;
+        c_auto yi1 = (dim - useCropH) / 2;
+        c_auto yi2 = (dim + useCropH) / 2;
+
+        std::vector<VertDev> vertsDev;
+        vertsDev.reserve( (yi2 - yi1) * (xi2 - xi1) );
+
         size_t cellIdx = 0;
-        for (size_t yi=0; yi < dim; ++yi)
+        for (size_t yi=yi1; yi < yi2; ++yi)
         {
             c_auto y = xoff + dxdt * (yi + 1);
-            for (size_t xi=0; xi < dim; ++xi, ++cellIdx)
+
+            c_auto rowCellIdx = yi << mSizeL2;
+            for (size_t xi=xi1; xi < xi2; ++xi)
             {
                 c_auto x = xoff + dxdt * (xi + 1);
 
                 VertObj vobj;
-                vobj.pos = {x, mHeights[ cellIdx ], y};
+                vobj.pos = {x, mHeights[ xi + rowCellIdx ], y};
                 vobj.siz = dxdt;
-                vobj.col = mCols[ cellIdx ];
+                vobj.col = mCols[ xi + rowCellIdx ];
 
                 // convert from object-space to device-space (2D display dimensions)
                 c_auto vout = makeDeviceVert( proj_obj, vobj, deviceW, deviceH );
@@ -200,10 +214,10 @@ public:
 };
 
 //==================================================================
-static void HMapScaleHeights( auto &hmap, float newMin, float newMax )
+static void TERR_ScaleHeights( auto &terr, float newMin, float newMax )
 {
-    auto *p = hmap.mHeights.data();
-    c_auto n = (size_t)1 << ((int)hmap.mSizeL2 * 2);
+    auto *p = terr.mHeights.data();
+    c_auto n = (size_t)1 << ((int)terr.mSizeL2 * 2);
 
     float mi =  FLT_MAX;
     float ma = -FLT_MAX;
@@ -231,7 +245,7 @@ inline auto remapRange( c_auto &v, c_auto &srcL, c_auto &srcR, c_auto &desL, c_a
 
 //==================================================================
 // geenrate colors and flatten the heights below sea level
-static void HMapColorize( std::vector<float> &heights, std::vector<ColType> &cols )
+static void TERR_Colorize( std::vector<float> &heights, std::vector<ColType> &cols )
 {
     cols.resize( heights.size() );
     for (size_t i=0; i < heights.size(); ++i)
@@ -255,23 +269,23 @@ static void HMapColorize( std::vector<float> &heights, std::vector<ColType> &col
 
 //==================================================================
 // geenrate colors and flatten the heights below sea level
-static void HMapCalcShadows( auto &hmap, Float3 lightDirWS )
+static void TERR_CalcShadows( auto &terr, Float3 lightDirWS )
 {
     auto checker = MU_ParallelOcclChecker(
-                        hmap.mHeights.data(),
+                        terr.mHeights.data(),
                         lightDirWS,
                         HMAP_MIN_H, // we know min and max since we rescaled
                         HMAP_MAX_H,
-                        hmap.mSizeL2 );
+                        terr.mSizeL2 );
 
-    c_auto dim = hmap.GetDim();
+    c_auto dim = terr.GetDim();
 	for (size_t yi=0; yi < dim; ++yi)
 	{
         for (size_t xi=0; xi < dim; ++xi)
 		{
 			if ( checker.IsOccludedAtPoint( (int)xi, (int)yi ) )
             {
-                auto &c = hmap.mCols[ hmap.MakeIndexXY( xi, yi ) ];
+                auto &c = terr.mCols[ terr.MakeIndexXY( xi, yi ) ];
                 c[0] /= 2; // make half bright
                 c[1] /= 2;
                 c[2] /= 2;
@@ -281,15 +295,15 @@ static void HMapCalcShadows( auto &hmap, Float3 lightDirWS )
 }
 
 //==================================================================
-static void hmap_MakeFromParams( auto &hmap )
+static void TERR_MakeFromParams( auto &terr )
 {
     // allocate a new map
-    hmap = HMap( _sPar.GEN_SIZL2 );
+    terr = Terrain( _sPar.GEN_SIZL2 );
 
     // fill it with "plasma"
     Plasma2::Params par;
-    par.pDest       = hmap.mHeights.data(); // destination values
-    par.sizL2       = hmap.mSizeL2;         // log2 of size (i.e. 7 = 128 pixels width/height)
+    par.pDest       = terr.mHeights.data(); // destination values
+    par.sizL2       = terr.mSizeL2;         // log2 of size (i.e. 7 = 128 pixels width/height)
     par.baseSizL2   = _sPar.GEN_STASIZL2;// log2 of size of initial low res map
     par.seed        = _sPar.GEN_SEED;
     par.rough       = _sPar.GEN_ROUGH;
@@ -301,26 +315,26 @@ static void hmap_MakeFromParams( auto &hmap )
     }
 
     // transform heights to the required range
-    HMapScaleHeights( hmap, HMAP_MIN_H, HMAP_MAX_H );
+    TERR_ScaleHeights( terr, HMAP_MIN_H, HMAP_MAX_H );
 
     // blend edges to make a continuous map
     if ( _sPar.GEN_WRAP_EDGES )
     {
         // we wrap by cross-blending the extreme 1/3 of the samples at the edges
-        c_auto wrapSiz = ((size_t)1 << hmap.mSizeL2) / 3;
-        MU_WrapMap<float,1>( hmap.mHeights.data(), hmap.mSizeL2, wrapSiz );
+        c_auto wrapSiz = ((size_t)1 << terr.mSizeL2) / 3;
+        MU_WrapMap<float,1>( terr.mHeights.data(), terr.mSizeL2, wrapSiz );
     }
 
     // apply colors
-    HMapColorize( hmap.mHeights, hmap.mCols );
+    TERR_Colorize( terr.mHeights, terr.mCols );
 
     // apply shadow dimming
-    HMapCalcShadows( hmap, LIGHT_DIR );
+    TERR_CalcShadows( terr, LIGHT_DIR );
 }
 
 #ifdef ENABLE_IMGUI
 //==================================================================
-static void handleUI( size_t frameCnt, HMap &hmap )
+static void handleUI( size_t frameCnt, Terrain &terr )
 {
     //ImGui::Text( "Frame: %zu", frameCnt );
 
@@ -336,30 +350,34 @@ static void handleUI( size_t frameCnt, HMap &hmap )
         ImGui::SliderFloat2( "Camera Pitch/Yaw", &_sPar.DISP_CAM_PY_ANGS[0], -180, 180 );
 
         ImGui::Checkbox( "Anim Yaw", &_sPar.DISP_ANIM_YAW );
+
+        ImGui::InputScalarN( "Crop", ImGuiDataType_U32, _sPar.DISP_CROP_WH, 2 );
     }
 
     if ( header( "Generation" ) )
     {
         auto inputU32 = []( c_auto *pName, uint32_t *pVal, uint32_t step )
         {
-            return ImGui::InputScalar( pName, ImGuiDataType_S32, pVal, &step, nullptr, "%d" );
+            return ImGui::InputScalar( pName, ImGuiDataType_U32, pVal, &step, nullptr, "%d" );
+        };
+        auto slideU32 = []( c_auto *pName, uint32_t *pVal, uint32_t mi, uint32_t ma )
+        {
+            return ImGui::SliderScalar( pName, ImGuiDataType_U32, pVal, &mi, &ma, nullptr, 0 );
         };
 
         bool rebuild = false;
-        rebuild |= inputU32( "Size Log2", &_sPar.GEN_SIZL2, 1 );
-        rebuild |= inputU32( "Init Size Log2", &_sPar.GEN_STASIZL2, 1 );
+        rebuild |= slideU32( "Size Log2", &_sPar.GEN_SIZL2, 0, 9 );
+        rebuild |= slideU32( "Init Size Log2", &_sPar.GEN_STASIZL2, 0, _sPar.GEN_SIZL2 );
         rebuild |= ImGui::InputFloat( "Roughness", &_sPar.GEN_ROUGH, 0.01f, 0.1f );
         rebuild |= inputU32( "Seed", &_sPar.GEN_SEED, 1 );
         rebuild |= ImGui::Checkbox( "Wrap Edges", &_sPar.GEN_WRAP_EDGES );
 
         if ( rebuild )
         {
-            _sPar.GEN_SIZL2    = std::clamp( _sPar.GEN_SIZL2, (uint32_t)0, (uint32_t)9 );
-            _sPar.GEN_STASIZL2 = std::clamp( _sPar.GEN_STASIZL2, (uint32_t)0, _sPar.GEN_SIZL2 );
-
+            _sPar.GEN_STASIZL2 = std::min( _sPar.GEN_STASIZL2, _sPar.GEN_SIZL2 );
             _sPar.GEN_ROUGH    = std::clamp( _sPar.GEN_ROUGH, 0.f, 1.f );
 
-            hmap_MakeFromParams( hmap );
+            TERR_MakeFromParams( terr );
         }
     }
 }
@@ -398,8 +416,8 @@ int main( int argc, char *argv[] )
 
     MinimalSDLApp app( argc, argv, W, H );
 
-    HMap hmap;
-    hmap_MakeFromParams( hmap );
+    Terrain terr;
+    TERR_MakeFromParams( terr );
 
     // begin the main/rendering loop
     for (size_t frameCnt=0; ; ++frameCnt)
@@ -409,7 +427,7 @@ int main( int argc, char *argv[] )
             break;
 
 #ifdef ENABLE_IMGUI
-        app.DrawMainUIWin( [&]() { handleUI( frameCnt, hmap ); } );
+        app.DrawMainUIWin( [&]() { handleUI( frameCnt, terr ); } );
 #endif
         // get the renderer
         auto *pRend = app.GetRenderer();
@@ -449,9 +467,10 @@ int main( int argc, char *argv[] )
         // obj -> proj matrix
         c_auto proj_obj = proj_camera * cam_world * world_obj;
 
-        // draw the voxel
-        hmap.DrawHMap(
+        // draw the terrain
+        terr.DrawTerrain(
                 HMAP_DISPW,
+                _sPar.DISP_CROP_WH,
                 pRend,
                 W,
                 H,
