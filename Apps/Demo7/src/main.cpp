@@ -14,50 +14,41 @@
 #include <algorithm> // for std::sort
 #include "DBase.h"
 #include "MathBase.h"
+#include "RendBase.h"
 #include "Plasma2.h"
+#include "Terrain.h"
+#include "TerrainGen.h"
 #include "MU_WrapMap.h"
-#include "MU_ParallelOcclChecker.h"
 #include "MinimalSDLApp.h"
 
 //==================================================================
-static constexpr float TERR_DISPW       = 10.f;
+static constexpr float TGEN_DISPW       = 10.f;
 
 static constexpr float DISP_CAM_NEAR    = 0.01f;    // near plane (1 cm)
 static constexpr float DISP_CAM_FAR     = 1000.f;   // far plane (1000 m)
-
-enum : uint8_t
-{
-    MATEID_LAND ,
-    MATEID_SEA  ,
-};
-
-static constexpr Float3 CHROM_LAND      { 0.8f , 0.7f , 0.0f }; // chrominance for land
-static constexpr Float3 CHROM_SEA       { 0.0f , 0.6f , 0.9f }; // chrominance for sea
 
 static const     Float3 LIGHT_DIR       { glm::normalize( Float3( 0.2f, 0.06f, 0.2f ) ) };
 
 struct DemoParams
 {
     float       DISP_CAM_FOV_DEG    = 65.f;       // field of view
-    float       DISP_CAM_DIST       = TERR_DISPW; // distance from center
+    float       DISP_CAM_DIST       = TGEN_DISPW; // distance from center
     Float2      DISP_CAM_PY_ANGS    = {20.f, 0.f};
     bool        DISP_ANIM_YAW       = true;
     uint32_t    DISP_CROP_WH[2]     = {0,0};
 
-    float       GEN_MIN_H           = -TERR_DISPW / 15.f;
-    float       GEN_MAX_H           =  TERR_DISPW / 10.f;
+    float       GEN_MIN_H           = -TGEN_DISPW / 15.f;
+    float       GEN_MAX_H           =  TGEN_DISPW / 10.f;
     uint32_t    GEN_SIZL2           = 7;       // 128 x 128 map
     uint32_t    GEN_STASIZL2        = 2;       // 4 x 4 initial random samples
     uint32_t    GEN_SEED            = 100;     // random seed
     float       GEN_ROUGH           = 0.5f;
-    bool        GEN_APPLY_SHADOWS   = true;
+    bool        GEN_DIFF_LIGHTING   = true;
+    bool        GEN_SHADOWS         = true;
     bool        GEN_WRAP_EDGES      = false;
 };
 
 static DemoParams   _sPar;
-
-//
-using ColType = glm::vec<4, uint8_t, glm::defaultp>;
 
 //==================================================================
 inline float DEG2RAD( float deg )
@@ -73,14 +64,14 @@ struct VertObj
 {
     Float3      pos;
     float       siz;
-    ColType     col;
+    RBColType   col;
 };
 // vertex output in screen space
 struct VertDev
 {
     Float3      pos {};
     Float2      siz {};
-    ColType     col {};
+    RBColType   col {};
 };
 
 //==================================================================
@@ -136,198 +127,73 @@ inline void drawAtom( auto *pRend, const VertDev &vdev )
 }
 
 //==================================================================
+static void drawTerrain(
+        auto &terr,
+        float mapDispW,
+        const uint32_t cropWH[2],
+        auto *pRend,
+        float deviceW,
+        float deviceH,
+        const Matrix44 &proj_obj )
+{
+    c_auto dim = (size_t)1 << terr.mSizeL2;
+
+    c_auto dxdt = mapDispW / (float)dim;
+    c_auto xoff = -mapDispW / 2;
+
+    // define the usable crop area (all if 0, otherwise no larger than the map's dim)
+    c_auto useCropW = cropWH[0] ? std::min( (size_t)cropWH[0], dim ) : dim;
+    c_auto useCropH = cropWH[1] ? std::min( (size_t)cropWH[1], dim ) : dim;
+
+    c_auto xi1 = (dim - useCropW) / 2;
+    c_auto xi2 = (dim + useCropW) / 2;
+    c_auto yi1 = (dim - useCropH) / 2;
+    c_auto yi2 = (dim + useCropH) / 2;
+
+    std::vector<VertDev> vertsDev;
+    vertsDev.reserve( (yi2 - yi1) * (xi2 - xi1) );
+
+    size_t cellIdx = 0;
+    for (size_t yi=yi1; yi < yi2; ++yi)
+    {
+        c_auto y = xoff + dxdt * (yi + 1);
+
+        c_auto rowCellIdx = yi << terr.mSizeL2;
+        for (size_t xi=xi1; xi < xi2; ++xi)
+        {
+            c_auto x = xoff + dxdt * (xi + 1);
+
+            c_auto cellIdx = xi + rowCellIdx;
+
+            VertObj vobj;
+            vobj.pos = {x, terr.mHeights[ cellIdx ], y};
+            vobj.siz = dxdt;
+            vobj.col = terr.mBakedCols[ cellIdx ];
+
+            // convert from object-space to device-space (2D display dimensions)
+            c_auto vout = makeDeviceVert( proj_obj, vobj, deviceW, deviceH );
+
+            // store the vertex
+            if ( vout.pos[2] > 0 )
+                vertsDev.push_back( vout );
+        }
+    }
+
+    // sort with bigger Z first
+    std::sort( vertsDev.begin(), vertsDev.end(), []( c_auto &l, c_auto &r )
+    {
+        return l.pos[2] > r.pos[2];
+    });
+
+    // finally render the verts
+    for (c_auto &v : vertsDev)
+        drawAtom( pRend, v );
+}
+
+//==================================================================
 //=== Generation
 //==================================================================
-
-//==================================================================
-class Terrain
-{
-public:
-    size_t                  mSizeL2 {};
-    std::vector<float>      mHeights;
-    std::vector<uint8_t>    mTexMono;
-    std::vector<uint8_t>    mMateID;
-    std::vector<bool>       mIsShadowed;
-    std::vector<ColType>    mCols;
-    float                   mMinH   {0};
-    float                   mMaxH   {1.5f};
-
-    Terrain() {}
-
-    Terrain( size_t sizeL2 )
-        : mSizeL2(sizeL2)
-        , mHeights( (size_t)1 << ((int)sizeL2 * 2) )
-    {
-    }
-
-    size_t GetDim() const { return (size_t)1 << mSizeL2; }
-
-    size_t MakeIndexXY( size_t x, size_t y ) const { return x + (y << mSizeL2); }
-
-    void DrawTerrain(
-            float mapDispW,
-            const uint32_t cropWH[2],
-            auto *pRend,
-            float deviceW,
-            float deviceH,
-            const Matrix44 &proj_obj ) const
-    {
-        c_auto dim = (size_t)1 << mSizeL2;
-
-        c_auto dxdt = mapDispW / (float)dim;
-        c_auto xoff = -mapDispW / 2;
-
-        // define the usable crop area (all if 0, otherwise no larger than the map's dim)
-        c_auto useCropW = cropWH[0] ? std::min( (size_t)cropWH[0], dim ) : dim;
-        c_auto useCropH = cropWH[1] ? std::min( (size_t)cropWH[1], dim ) : dim;
-
-        c_auto xi1 = (dim - useCropW) / 2;
-        c_auto xi2 = (dim + useCropW) / 2;
-        c_auto yi1 = (dim - useCropH) / 2;
-        c_auto yi2 = (dim + useCropH) / 2;
-
-        std::vector<VertDev> vertsDev;
-        vertsDev.reserve( (yi2 - yi1) * (xi2 - xi1) );
-
-        size_t cellIdx = 0;
-        for (size_t yi=yi1; yi < yi2; ++yi)
-        {
-            c_auto y = xoff + dxdt * (yi + 1);
-
-            c_auto rowCellIdx = yi << mSizeL2;
-            for (size_t xi=xi1; xi < xi2; ++xi)
-            {
-                c_auto x = xoff + dxdt * (xi + 1);
-
-                c_auto cellIdx = xi + rowCellIdx;
-
-                VertObj vobj;
-                vobj.pos = {x, mHeights[ cellIdx ], y};
-                vobj.siz = dxdt;
-                vobj.col = mCols[ cellIdx ];
-
-                // convert from object-space to device-space (2D display dimensions)
-                c_auto vout = makeDeviceVert( proj_obj, vobj, deviceW, deviceH );
-
-                // store the vertex
-                if ( vout.pos[2] > 0 )
-                    vertsDev.push_back( vout );
-            }
-        }
-
-        // sort with bigger Z first
-        std::sort( vertsDev.begin(), vertsDev.end(), []( c_auto &l, c_auto &r )
-        {
-            return l.pos[2] > r.pos[2];
-        });
-
-        // finally render the verts
-        for (c_auto &v : vertsDev)
-            drawAtom( pRend, v );
-    }
-};
-
-//==================================================================
-static void TERR_ScaleHeights( auto &terr, float newMin, float newMax )
-{
-    auto *p = terr.mHeights.data();
-    c_auto n = (size_t)1 << ((int)terr.mSizeL2 * 2);
-
-    float mi =  FLT_MAX;
-    float ma = -FLT_MAX;
-    for (size_t i=0; i < n; ++i)
-    {
-        mi = std::min( mi, p[i] );
-        ma = std::max( ma, p[i] );
-    }
-
-    // rescale and offset
-    c_auto scaToNew = (ma != mi) ? ((newMax - newMin) / (ma - mi)) : 0.f;
-    for (size_t i=0; i < n; ++i)
-        p[i] = newMin + (p[i] - mi) * scaToNew;
-
-    // update the terrain values
-    terr.mMinH = newMin;
-    terr.mMaxH = newMax;
-}
-
-//==================================================================
-inline auto remapRange( c_auto &v, c_auto &srcL, c_auto &srcR, c_auto &desL, c_auto &desR )
-{
-    c_auto t = (v - srcL) / (srcR - srcL);
-    return glm::mix( desL, desR, t );
-}
-
-//==================================================================
-static void TERR_MakeMateAndTex( auto &terr )
-{
-    terr.mMateID.resize( terr.mHeights.size() );
-    terr.mTexMono.resize( terr.mHeights.size() );
-    for (size_t i=0; i < terr.mHeights.size(); ++i)
-    {
-        auto &h = terr.mHeights[i];
-
-        // material
-        terr.mMateID[ i ] = (h >= 0 ? MATEID_LAND : MATEID_SEA);
-
-        // only build a "texture" for the sea
-        terr.mTexMono[ i ] = terr.mMateID[ i ] == MATEID_LAND
-                ? 255
-                : (uint8_t)remapRange( h, terr.mMinH, 0, 40.f, 255.f );
-    }
-}
-
-//==================================================================
-static void TERR_FloattedSeaBed( auto &terr )
-{
-    for (auto &h : terr.mHeights)
-        h = std::max( h, 0.f );
-}
-
-//==================================================================
-// geenrate colors and flatten the heights below sea level
-static void TERR_CalcShadows( auto &terr, Float3 lightDirWS )
-{
-    auto checker = MU_ParallelOcclChecker(
-                        terr.mHeights.data(),
-                        lightDirWS,
-                        terr.mMinH,
-                        terr.mMaxH,
-                        terr.mSizeL2 );
-
-    c_auto dim = (int)terr.GetDim();
-    size_t cellIdx = 0;
-	for (int yi=0; yi < dim; ++yi)
-	{
-        for (int xi=0; xi < dim; ++xi, ++cellIdx)
-		{
-            terr.mIsShadowed[cellIdx] = checker.IsOccludedAtPoint( xi, yi );
-		}
-	}
-}
-
-//==================================================================
-static void TERR_CalcFinalColors( auto &terr )
-{
-    terr.mCols.resize( terr.mMateID.size() );
-    for (size_t i=0; i < terr.mHeights.size(); ++i)
-    {
-        c_auto col3f =
-            glm::clamp(
-                  (terr.mMateID[i] == MATEID_LAND ? CHROM_LAND : CHROM_SEA)
-                * (terr.mTexMono[i] * (1.f/255))
-                * (terr.mIsShadowed[i] ? 0.5f : 1.f)
-                * 255.f,
-                Float3( 0,  0,  0   ),
-                Float3( 255,255,255 ) );
-
-        // assign the final color
-        terr.mCols[i] = { (uint8_t)col3f[0], (uint8_t)col3f[1], (uint8_t)col3f[2], 255 };;
-    }
-}
-
-//==================================================================
-static void TERR_MakeFromParams( auto &terr )
+static void makeTerrFromParams( auto &terr )
 {
     // allocate a new map
     terr = Terrain( _sPar.GEN_SIZL2 );
@@ -347,7 +213,7 @@ static void TERR_MakeFromParams( auto &terr )
     }
 
     // transform heights to the required range
-    TERR_ScaleHeights( terr, _sPar.GEN_MIN_H, _sPar.GEN_MAX_H );
+    TGEN_ScaleHeights( terr, _sPar.GEN_MIN_H, _sPar.GEN_MAX_H );
 
     // blend edges to make a continuous map
     if ( _sPar.GEN_WRAP_EDGES )
@@ -357,16 +223,17 @@ static void TERR_MakeFromParams( auto &terr )
         MU_WrapMap<float,1>( terr.mHeights.data(), terr.mSizeL2, wrapSiz );
     }
 
-    TERR_MakeMateAndTex( terr );
+    TGEN_MakeMateAndTex( terr );
 
-    TERR_FloattedSeaBed( terr );
+    TGEN_FlattenSeaBed( terr );
 
-    // calculate the shadow flag, if applicable
-    terr.mIsShadowed.resize( terr.mHeights.size() );
-    if ( _sPar.GEN_APPLY_SHADOWS )
-        TERR_CalcShadows( terr, LIGHT_DIR );
+    if ( _sPar.GEN_DIFF_LIGHTING )
+        TGEN_CalcShadeDiff( terr, LIGHT_DIR );
 
-    TERR_CalcFinalColors( terr );
+    if ( _sPar.GEN_SHADOWS )
+        TGEN_CalcShadows( terr, LIGHT_DIR );
+
+    TGEN_CalcBakedColors( terr );
 }
 
 #ifdef ENABLE_IMGUI
@@ -409,7 +276,8 @@ static void handleUI( size_t frameCnt, Terrain &terr )
         rebuild |= slideU32( "Init Size Log2", &_sPar.GEN_STASIZL2, 0, _sPar.GEN_SIZL2 );
         rebuild |= ImGui::InputFloat( "Roughness", &_sPar.GEN_ROUGH, 0.01f, 0.1f );
         rebuild |= inputU32( "Seed", &_sPar.GEN_SEED, 1 );
-        rebuild |= ImGui::Checkbox( "Apply Shadows", &_sPar.GEN_APPLY_SHADOWS );
+        rebuild |= ImGui::Checkbox( "Diffuse Lighting", &_sPar.GEN_DIFF_LIGHTING );
+        rebuild |= ImGui::Checkbox( "Shadows", &_sPar.GEN_SHADOWS );
         rebuild |= ImGui::Checkbox( "Wrap Edges", &_sPar.GEN_WRAP_EDGES );
 
         if ( rebuild )
@@ -417,7 +285,7 @@ static void handleUI( size_t frameCnt, Terrain &terr )
             _sPar.GEN_STASIZL2 = std::min( _sPar.GEN_STASIZL2, _sPar.GEN_SIZL2 );
             _sPar.GEN_ROUGH    = std::clamp( _sPar.GEN_ROUGH, 0.f, 1.f );
 
-            TERR_MakeFromParams( terr );
+            makeTerrFromParams( terr );
         }
     }
 }
@@ -445,7 +313,7 @@ inline void debugDraw(
 
     SDL_SetRenderDrawColor( pRend, 0, 255, 0, 90 );
 
-    draw3DLine( Float3(0,0,0), LIGHT_DIR * TERR_DISPW * 0.5f );
+    draw3DLine( Float3(0,0,0), LIGHT_DIR * TGEN_DISPW * 0.5f );
 }
 
 //==================================================================
@@ -457,7 +325,7 @@ int main( int argc, char *argv[] )
     MinimalSDLApp app( argc, argv, W, H );
 
     Terrain terr;
-    TERR_MakeFromParams( terr );
+    makeTerrFromParams( terr );
 
     // begin the main/rendering loop
     for (size_t frameCnt=0; ; ++frameCnt)
@@ -508,8 +376,9 @@ int main( int argc, char *argv[] )
         c_auto proj_obj = proj_camera * cam_world * world_obj;
 
         // draw the terrain
-        terr.DrawTerrain(
-                TERR_DISPW,
+        drawTerrain(
+                terr,
+                TGEN_DISPW,
                 _sPar.DISP_CROP_WH,
                 pRend,
                 W,
