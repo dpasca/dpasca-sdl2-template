@@ -84,7 +84,7 @@ static void TGEN_CalcShadows( auto &terr, Float3 lightDirWS )
                         terr.mMaxH,
                         terr.mSizeL2 );
 
-    c_auto siz = (int)terr.GetSize();
+    c_auto siz = (int)terr.GetSiz();
     size_t cellIdx = 0;
 	for (int yi=0; yi < siz; ++yi)
 	{

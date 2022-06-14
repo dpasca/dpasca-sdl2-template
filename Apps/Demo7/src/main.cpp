@@ -22,7 +22,7 @@
 #include "MinimalSDLApp.h"
 
 //==================================================================
-static constexpr float TGEN_DISPW       = 10.f;
+static constexpr float DISP_TERR_SCALE  = 10.f;
 
 static constexpr float DISP_CAM_NEAR    = 0.01f;    // near plane (1 cm)
 static constexpr float DISP_CAM_FAR     = 1000.f;   // far plane (1000 m)
@@ -32,13 +32,13 @@ static const     Float3 LIGHT_DIR       { glm::normalize( Float3( 0.2f, 0.06f, 0
 struct DemoParams
 {
     float       DISP_CAM_FOV_DEG    = 65.f;       // field of view
-    float       DISP_CAM_DIST       = TGEN_DISPW; // distance from center
+    float       DISP_CAM_DIST       = DISP_TERR_SCALE; // distance from center
     Float2      DISP_CAM_PY_ANGS    = {20.f, 0.f};
     bool        DISP_ANIM_YAW       = true;
     uint32_t    DISP_CROP_WH[2]     = {0,0};
 
-    float       GEN_MIN_H           = -TGEN_DISPW / 15.f;
-    float       GEN_MAX_H           =  TGEN_DISPW / 10.f;
+    float       GEN_MIN_H           = -0.15f;
+    float       GEN_MAX_H           =  0.10f;
     uint32_t    GEN_SIZL2           = 7;       // 128 x 128 map
     uint32_t    GEN_STASIZL2        = 2;       // 4 x 4 initial random samples
     uint32_t    GEN_SEED            = 100;     // random seed
@@ -129,7 +129,7 @@ inline void drawAtom( auto *pRend, const VertDev &vdev )
 //==================================================================
 static void drawTerrain(
         auto &terr,
-        float mapDispW,
+        float dispSca,
         const uint32_t cropWH[2],
         auto *pRend,
         float deviceW,
@@ -138,8 +138,7 @@ static void drawTerrain(
 {
     c_auto siz = (size_t)1 << terr.GetSizL2();
 
-    c_auto dxdt = mapDispW / (float)siz;
-    c_auto xoff = -mapDispW / 2;
+    c_auto dxdt = dispSca / (float)siz;
 
     // define the usable crop area (all if 0, otherwise no larger than the map's siz)
     c_auto useCropW = cropWH[0] ? std::min( (size_t)cropWH[0], siz ) : siz;
@@ -149,23 +148,25 @@ static void drawTerrain(
     c_auto xi2 = (siz + useCropW) / 2;
     c_auto yi1 = (siz - useCropH) / 2;
     c_auto yi2 = (siz + useCropH) / 2;
+    c_auto oowd = 1.f / (xi2 - xi1);
+    c_auto oohe = 1.f / (yi2 - yi1);
 
     std::vector<VertDev> vertsDev;
     vertsDev.reserve( (yi2 - yi1) * (xi2 - xi1) );
 
     for (size_t yi=yi1; yi < yi2; ++yi)
     {
-        c_auto y = xoff + dxdt * (yi + 1);
+        c_auto y = glm::mix( -0.5f, 0.5f, yi * oohe );
 
         c_auto rowCellIdx = yi << terr.GetSizL2();
         for (size_t xi=xi1; xi < xi2; ++xi)
         {
-            c_auto x = xoff + dxdt * (xi + 1);
+            c_auto x = glm::mix( -0.5f, 0.5f, xi * oowd );
 
             c_auto cellIdx = xi + rowCellIdx;
 
             VertObj vobj;
-            vobj.pos = {x, terr.mHeights[ cellIdx ], y};
+            vobj.pos = dispSca * Float3( x, terr.mHeights[ cellIdx ], y );
             vobj.siz = dxdt;
             vobj.col = terr.mBakedCols[ cellIdx ];
 
@@ -312,7 +313,7 @@ inline void debugDraw(
 
     SDL_SetRenderDrawColor( pRend, 0, 255, 0, 90 );
 
-    draw3DLine( Float3(0,0,0), LIGHT_DIR * TGEN_DISPW * 0.5f );
+    draw3DLine( Float3(0,0,0), LIGHT_DIR * DISP_TERR_SCALE * 0.5f );
 }
 
 //==================================================================
@@ -377,7 +378,7 @@ int main( int argc, char *argv[] )
         // draw the terrain
         drawTerrain(
                 terr,
-                TGEN_DISPW,
+                DISP_TERR_SCALE,
                 _sPar.DISP_CROP_WH,
                 pRend,
                 W,

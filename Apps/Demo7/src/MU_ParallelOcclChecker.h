@@ -48,17 +48,13 @@ public:
             std::swap( lightDirWS[0], lightDirWS[2] );
         }
 
-        c_auto dim = (int)(1 << sizL2);
+        c_auto siz = (int)(1 << sizL2);
 
-        c_auto coordMax = dim - 1;
-
-        // obsolete, but we keep it for now
-        constexpr int QUANT_SCALE = 1;
-        const float DY_SCA = QUANT_SCALE * QUANT_SCALE;
+        c_auto coordMax = siz - 1;
 
         mLen0   = coordMax;
         mD0n    = 1;
-        mD1n    = lightDirWS[1] / lightDirWS[0] * DY_SCA * (10.f / (float)dim);
+        mD1n    = lightDirWS[1] / lightDirWS[0] / (float)siz;
         mD2n    = lightDirWS[2] / lightDirWS[0];
 
         if ( lightDirWS[0] < 0 )
