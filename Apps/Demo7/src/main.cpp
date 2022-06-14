@@ -25,6 +25,12 @@ static constexpr float TERR_DISPW       = 10.f;
 static constexpr float DISP_CAM_NEAR    = 0.01f;    // near plane (1 cm)
 static constexpr float DISP_CAM_FAR     = 1000.f;   // far plane (1000 m)
 
+enum : uint8_t
+{
+    MATEID_LAND ,
+    MATEID_SEA  ,
+};
+
 static constexpr Float3 CHROM_LAND      { 0.8f , 0.7f , 0.0f }; // chrominance for land
 static constexpr Float3 CHROM_SEA       { 0.0f , 0.6f , 0.9f }; // chrominance for sea
 
@@ -139,6 +145,9 @@ class Terrain
 public:
     size_t                  mSizeL2 {};
     std::vector<float>      mHeights;
+    std::vector<uint8_t>    mTexMono;
+    std::vector<uint8_t>    mMateID;
+    std::vector<bool>       mIsShadowed;
     std::vector<ColType>    mCols;
     float                   mMinH   {0};
     float                   mMaxH   {1.5f};
@@ -190,10 +199,12 @@ public:
             {
                 c_auto x = xoff + dxdt * (xi + 1);
 
+                c_auto cellIdx = xi + rowCellIdx;
+
                 VertObj vobj;
-                vobj.pos = {x, mHeights[ xi + rowCellIdx ], y};
+                vobj.pos = {x, mHeights[ cellIdx ], y};
                 vobj.siz = dxdt;
-                vobj.col = mCols[ xi + rowCellIdx ];
+                vobj.col = mCols[ cellIdx ];
 
                 // convert from object-space to device-space (2D display dimensions)
                 c_auto vout = makeDeviceVert( proj_obj, vobj, deviceW, deviceH );
@@ -248,27 +259,29 @@ inline auto remapRange( c_auto &v, c_auto &srcL, c_auto &srcR, c_auto &desL, c_a
 }
 
 //==================================================================
-// geenrate colors and flatten the heights below sea level
-static void TERR_Colorize( auto &terr )
+static void TERR_MakeMateAndTex( auto &terr )
 {
-    terr.mCols.resize( terr.mHeights.size() );
+    terr.mMateID.resize( terr.mHeights.size() );
+    terr.mTexMono.resize( terr.mHeights.size() );
     for (size_t i=0; i < terr.mHeights.size(); ++i)
     {
         auto &h = terr.mHeights[i];
 
-        // chrominance
-        c_auto chrom = h >= 0 ? CHROM_LAND : CHROM_SEA;
-        // luminance from min-max range to a suitable range for coloring
-        c_auto lum = remapRange( h, terr.mMinH, terr.mMaxH, 40.f, 255.f );
-        // complete color is luminance by chrominance
-        c_auto col = lum * chrom;
+        // material
+        terr.mMateID[ i ] = (h >= 0 ? MATEID_LAND : MATEID_SEA);
 
-        // assign the color to the map
-        terr.mCols[i] = { (uint8_t)col[0], (uint8_t)col[1], (uint8_t)col[2], 255 };
-
-        // flatted to the height map at the sea level !
-        h = std::max( h, 0.f );
+        // only build a "texture" for the sea
+        terr.mTexMono[ i ] = terr.mMateID[ i ] == MATEID_LAND
+                ? 255
+                : (uint8_t)remapRange( h, terr.mMinH, 0, 40.f, 255.f );
     }
+}
+
+//==================================================================
+static void TERR_FloattedSeaBed( auto &terr )
+{
+    for (auto &h : terr.mHeights)
+        h = std::max( h, 0.f );
 }
 
 //==================================================================
@@ -282,20 +295,35 @@ static void TERR_CalcShadows( auto &terr, Float3 lightDirWS )
                         terr.mMaxH,
                         terr.mSizeL2 );
 
-    c_auto dim = terr.GetDim();
-	for (size_t yi=0; yi < dim; ++yi)
+    c_auto dim = (int)terr.GetDim();
+    size_t cellIdx = 0;
+	for (int yi=0; yi < dim; ++yi)
 	{
-        for (size_t xi=0; xi < dim; ++xi)
+        for (int xi=0; xi < dim; ++xi, ++cellIdx)
 		{
-			if ( checker.IsOccludedAtPoint( (int)xi, (int)yi ) )
-            {
-                auto &c = terr.mCols[ terr.MakeIndexXY( xi, yi ) ];
-                c[0] /= 2; // make half bright
-                c[1] /= 2;
-                c[2] /= 2;
-            }
+            terr.mIsShadowed[cellIdx] = checker.IsOccludedAtPoint( xi, yi );
 		}
 	}
+}
+
+//==================================================================
+static void TERR_CalcFinalColors( auto &terr )
+{
+    terr.mCols.resize( terr.mMateID.size() );
+    for (size_t i=0; i < terr.mHeights.size(); ++i)
+    {
+        c_auto col3f =
+            glm::clamp(
+                  (terr.mMateID[i] == MATEID_LAND ? CHROM_LAND : CHROM_SEA)
+                * (terr.mTexMono[i] * (1.f/255))
+                * (terr.mIsShadowed[i] ? 0.5f : 1.f)
+                * 255.f,
+                Float3( 0,  0,  0   ),
+                Float3( 255,255,255 ) );
+
+        // assign the final color
+        terr.mCols[i] = { (uint8_t)col3f[0], (uint8_t)col3f[1], (uint8_t)col3f[2], 255 };;
+    }
 }
 
 //==================================================================
@@ -329,12 +357,16 @@ static void TERR_MakeFromParams( auto &terr )
         MU_WrapMap<float,1>( terr.mHeights.data(), terr.mSizeL2, wrapSiz );
     }
 
-    // apply colors
-    TERR_Colorize( terr );
+    TERR_MakeMateAndTex( terr );
 
-    // apply shadow dimming
+    TERR_FloattedSeaBed( terr );
+
+    // calculate the shadow flag, if applicable
+    terr.mIsShadowed.resize( terr.mHeights.size() );
     if ( _sPar.GEN_APPLY_SHADOWS )
         TERR_CalcShadows( terr, LIGHT_DIR );
+
+    TERR_CalcFinalColors( terr );
 }
 
 #ifdef ENABLE_IMGUI
