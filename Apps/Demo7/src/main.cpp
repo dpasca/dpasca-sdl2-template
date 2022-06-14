@@ -27,9 +27,6 @@ static constexpr float DISP_TERR_SCALE  = 10.f;
 static constexpr float DISP_CAM_NEAR    = 0.01f;    // near plane (1 cm)
 static constexpr float DISP_CAM_FAR     = 1000.f;   // far plane (1000 m)
 
-// this is in Local Space, which is equivalent to World Space since obj is fixed at 0
-static const     Float3 LIGHT_DIR_LS    { glm::normalize( Float3( 0.2f, 0.06f, 0.2f ) ) };
-
 struct DemoParams
 {
     float       DISP_CAM_FOV_DEG    = 65.f;       // field of view
@@ -50,14 +47,23 @@ struct DemoParams
     bool        LIGHT_ENABLE_SHA    = true;
     Float3      LIGHT_DIFF_COL      = {1.0f, 1.0f, 1.0f};
     Float3      LIGHT_AMB_COL       = {0.3f, 0.3f, 0.3f};
+    Float2      LIGHT_DIR_LAT_LONG  = {30.f, 0.f};
 };
 
 static DemoParams   _sPar;
+
+static int _sForceDebugRendCnt = 0;
 
 //==================================================================
 inline float DEG2RAD( float deg )
 {
     return glm::pi<float>() / 180.f * deg;
+}
+
+//==================================================================
+inline Float3 calcLightDir( const Float2 &the_phi_deg )
+{
+    return glm::euclidean( Float2( DEG2RAD(the_phi_deg[0]), DEG2RAD(the_phi_deg[1]) ) );
 }
 
 //==================================================================
@@ -231,10 +237,10 @@ static void makeTerrFromParams( auto &terr )
     TGEN_FlattenSeaBed( terr );
 
     if ( _sPar.LIGHT_ENABLE_DIFF )
-        TGEN_CalcDiffLight( terr, LIGHT_DIR_LS );
+        TGEN_CalcDiffLight( terr, calcLightDir( _sPar.LIGHT_DIR_LAT_LONG ) );
 
     if ( _sPar.LIGHT_ENABLE_SHA )
-        TGEN_CalcShadows( terr, LIGHT_DIR_LS );
+        TGEN_CalcShadows( terr, calcLightDir( _sPar.LIGHT_DIR_LAT_LONG ) );
 
     TGEN_CalcBakedColors( terr, _sPar.LIGHT_DIFF_COL, _sPar.LIGHT_AMB_COL );
 }
@@ -296,6 +302,15 @@ static void handleUI( size_t frameCnt, Terrain &terr )
             return changed;
         };
 
+        bool moved {};
+        auto &ll = _sPar.LIGHT_DIR_LAT_LONG;
+        moved |= ImGui::SliderFloat( "Light Dir Latitude",  &ll[0], 0,  90 );
+        moved |= ImGui::SliderFloat( "Light Dir Longitude", &ll[1], 0, 360 );
+        rebuild |= moved;
+
+        if ( moved )
+            _sForceDebugRendCnt = 60*4;
+
         rebuild |= inputF3( "Light Col", _sPar.LIGHT_DIFF_COL, 0, 5 );
         rebuild |= inputF3( "Ambient Col", _sPar.LIGHT_AMB_COL, 0, 5 );
     }
@@ -332,7 +347,9 @@ inline void debugDraw(
 
     SDL_SetRenderDrawColor( pRend, 0, 255, 0, 90 );
 
-    draw3DLine( Float3(0,0,0), LIGHT_DIR_LS * DISP_TERR_SCALE * 0.5f );
+    draw3DLine(
+            Float3(0,0,0),
+            calcLightDir( _sPar.LIGHT_DIR_LAT_LONG ) * DISP_TERR_SCALE * 0.5f );
 }
 
 //==================================================================
@@ -405,7 +422,11 @@ int main( int argc, char *argv[] )
                 proj_obj );
 
         //
-        //debugDraw( pRend, W, H, proj_obj );
+        if ( _sForceDebugRendCnt )
+        {
+            _sForceDebugRendCnt -= 1;
+            debugDraw( pRend, W, H, proj_obj );
+        }
 
         // end of the frame (will present)
         app.EndFrame();

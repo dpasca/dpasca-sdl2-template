@@ -22,6 +22,7 @@ inline constexpr auto FM_PI = (float)M_PI;
 #include <glm/ext/matrix_transform.hpp>  // glm::translate, glm::rotate, glm::scale
 #include <glm/ext/matrix_clip_space.hpp> // glm::perspective
 #include <glm/ext/scalar_constants.hpp>  // glm::pi
+#include <glm/gtx/polar_coordinates.hpp> // glm::euclidean
 
 using Float2 = glm::vec2;
 using Float3 = glm::vec3;
