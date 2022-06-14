@@ -151,7 +151,7 @@ static void TGEN_CalcDiffLight( auto &terr, Float3 lightDirLS )
 }
 
 //==================================================================
-static void TGEN_CalcBakedColors( auto &terr )
+static void TGEN_CalcBakedColors( auto &terr, const Float3 &lightDif, const Float3 &amb )
 {
     auto makeU8 = []( c_auto valf ) -> std::array<uint8_t,3>
     {
@@ -162,7 +162,6 @@ static void TGEN_CalcBakedColors( auto &terr )
                  (uint8_t)valf8[2] };
     };
 
-    c_auto amb = Float3( 0.3f, 0.3f, 0.3f );
     for (size_t i=0; i < terr.mHeights.size(); ++i)
     {
         c_auto chr = (terr.mMateID[i] == MATEID_LAND ? CHROM_LAND : CHROM_SEA);
@@ -170,7 +169,7 @@ static void TGEN_CalcBakedColors( auto &terr )
         c_auto dif = (terr.mDiffLight[i] * (1.f/255));
         c_auto sha = (terr.mIsShadowed[i] ? 0.0f : 1.f);
 
-        c_auto colU8 = makeU8( chr * tex * (amb + dif * sha) );
+        c_auto colU8 = makeU8( chr * tex * (amb + lightDif * dif * sha) );
 
         // assign the final color
         terr.mBakedCols[i] = { colU8[0], colU8[1], colU8[2], 255 };

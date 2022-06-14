@@ -48,6 +48,8 @@ struct DemoParams
 
     bool        LIGHT_ENABLE_DIFF   = true;
     bool        LIGHT_ENABLE_SHA    = true;
+    Float3      LIGHT_DIFF_COL      = {1.0f, 1.0f, 1.0f};
+    Float3      LIGHT_AMB_COL       = {0.3f, 0.3f, 0.3f};
 };
 
 static DemoParams   _sPar;
@@ -235,7 +237,7 @@ static void makeTerrFromParams( auto &terr )
     if ( _sPar.LIGHT_ENABLE_SHA )
         TGEN_CalcShadows( terr, LIGHT_DIR_LS );
 
-    TGEN_CalcBakedColors( terr );
+    TGEN_CalcBakedColors( terr, _sPar.LIGHT_DIFF_COL, _sPar.LIGHT_AMB_COL );
 }
 
 #ifdef ENABLE_IMGUI
@@ -286,6 +288,17 @@ static void handleUI( size_t frameCnt, Terrain &terr )
     {
         rebuild |= ImGui::Checkbox( "Enable Diffuse", &_sPar.LIGHT_ENABLE_DIFF );
         rebuild |= ImGui::Checkbox( "Enable Shadows", &_sPar.LIGHT_ENABLE_SHA );
+
+        auto inputF3 = []( c_auto *pName, Float3 &val, float mi, float ma )
+        {
+            c_auto changed = ImGui::InputFloat3( pName, &val[0] );
+
+            val = glm::clamp( val, Float3{ mi, mi, mi }, Float3{ ma, ma, ma } );
+            return changed;
+        };
+
+        rebuild |= inputF3( "Light Col", _sPar.LIGHT_DIFF_COL, 0, 5 );
+        rebuild |= inputF3( "Ambient Col", _sPar.LIGHT_AMB_COL, 0, 5 );
     }
 
     if ( rebuild )
