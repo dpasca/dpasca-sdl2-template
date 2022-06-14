@@ -89,7 +89,7 @@ public:
         if ( q1 > mMaxY ) q0 = p0 + (int)((mMaxY - p1) * mOo_d1n); else
         if ( q1 < mMinY ) q0 = p0 + (int)((mMinY - p1) * mOo_d1n);
 
-        if ( mD0n < 0 ? p0 >= q0 : p0 <= q0 )
+        if ( mD0n > 0 ? (p0 >= q0) : (p0 <= q0) )
             return false;
 
         auto i2 = (float)p2;
