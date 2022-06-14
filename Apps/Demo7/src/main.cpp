@@ -140,7 +140,7 @@ static void drawTerrain(
         float deviceH,
         const Matrix44 &proj_obj )
 {
-    c_auto siz = (size_t)1 << terr.GetSizL2();
+    c_auto siz = terr.GetSiz();
 
     c_auto dxdt = dispSca / (float)siz;
 
@@ -152,20 +152,19 @@ static void drawTerrain(
     c_auto xi2 = (siz + useCropW) / 2;
     c_auto yi1 = (siz - useCropH) / 2;
     c_auto yi2 = (siz + useCropH) / 2;
-    c_auto oowd = 1.f / (xi2 - xi1);
-    c_auto oohe = 1.f / (yi2 - yi1);
 
     std::vector<VertDev> vertsDev;
     vertsDev.reserve( (yi2 - yi1) * (xi2 - xi1) );
 
+    c_auto oosiz = 1.f / siz;
     for (size_t yi=yi1; yi < yi2; ++yi)
     {
-        c_auto y = glm::mix( -0.5f, 0.5f, yi * oohe );
+        c_auto y = glm::mix( -0.5f, 0.5f, yi * oosiz );
 
         c_auto rowCellIdx = yi << terr.GetSizL2();
         for (size_t xi=xi1; xi < xi2; ++xi)
         {
-            c_auto x = glm::mix( -0.5f, 0.5f, xi * oowd );
+            c_auto x = glm::mix( -0.5f, 0.5f, xi * oosiz );
 
             c_auto cellIdx = xi + rowCellIdx;
 
