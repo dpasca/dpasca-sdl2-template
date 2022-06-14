@@ -20,8 +20,8 @@ enum : uint8_t
     MATEID_SEA  ,
 };
 
-static constexpr Float3 CHROM_LAND      { 0.8f , 0.7f , 0.0f }; // chrominance for land
-static constexpr Float3 CHROM_SEA       { 0.0f , 0.6f , 0.9f }; // chrominance for sea
+static constexpr auto CHROM_LAND = Float3{ 0.8f , 0.7f , 0.0f }; // chrominance for land
+static constexpr auto CHROM_SEA  = Float3{ 0.0f , 0.6f , 0.9f } * 1.5f; // chrominance for sea
 
 //==================================================================
 class Terrain
@@ -32,7 +32,7 @@ public:
     std::vector<uint8_t>    mTexMono;
     std::vector<uint8_t>    mMateID;
     std::vector<bool>       mIsShadowed;
-    std::vector<float>      mShadeDiff;
+    std::vector<float>      mDiffLight;
     std::vector<RBColType>  mBakedCols;
     float                   mMinH   {0};
     float                   mMaxH   {1.5f};
@@ -48,7 +48,7 @@ public:
         mTexMono    = std::vector<uint8_t>  ( n, 255 );
         mMateID     = std::vector<uint8_t>  ( n, 0 );
         mIsShadowed = std::vector<bool>     ( n, false );
-        mShadeDiff  = std::vector<float>    ( n, 1.f );
+        mDiffLight  = std::vector<float>    ( n, 1.f );
         mBakedCols  = std::vector<RBColType>( n, RBColType{255,0,255,255} );
     }
 

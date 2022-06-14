@@ -73,13 +73,13 @@ static void TGEN_FlattenSeaBed( auto &terr )
 
 //==================================================================
 // geenrate colors and flatten the heights below sea level
-static void TGEN_CalcShadows( auto &terr, Float3 lightDirWS )
+static void TGEN_CalcShadows( auto &terr, Float3 lightDirLS )
 {
-    lightDirWS = glm::normalize( lightDirWS );
+    lightDirLS = glm::normalize( lightDirLS );
 
     auto checker = MU_ParallelOcclChecker(
                         terr.mHeights.data(),
-                        lightDirWS,
+                        lightDirLS,
                         terr.mMinH,
                         terr.mMaxH,
                         terr.mSizeL2 );
@@ -96,32 +96,84 @@ static void TGEN_CalcShadows( auto &terr, Float3 lightDirWS )
 }
 
 //==================================================================
-static void TGEN_CalcShadeDiff( auto &terr, Float3 lightDirWS )
+static void TGEN_CalcDiffLight( auto &terr, Float3 lightDirLS )
 {
-    lightDirWS = glm::normalize( lightDirWS );
+    lightDirLS = glm::normalize( lightDirLS );
+#if 1
+    c_auto siz = (int)terr.GetSiz();
 
-	{
-		{
-		}
-	}
+    c_auto ix1 = (size_t)0;
+    c_auto ix2 = (size_t)siz;
+    c_auto iy1 = (size_t)0;
+    c_auto iy2 = (size_t)siz;
+
+    c_auto &heights = terr.mHeights;
+      auto &diffLight = terr.mDiffLight;
+
+    c_auto &shadows = terr.mIsShadowed;
+
+    c_auto cellUnit = 1.f / siz;
+    c_auto y = -2 * cellUnit;
+    c_auto ySqrt = y * y;
+
+    for (auto iy=iy1, r00=iy1*siz; iy < iy2; ++iy, r00 += siz)
+    {
+        c_auto r10 = (iy == siz-1) ? (size_t)0 : r00 + siz;
+
+        for (auto c00=ix1; c00 < ix2; ++c00)
+        {
+            c_auto c01 = (c00 == siz-1) ? (size_t)0 : c00 + 1;
+
+            c_auto a = heights[r00+c00];    // a----b
+            c_auto b = heights[r00+c01];    // |    |
+            c_auto c = heights[r10+c00];    // |    |
+            c_auto d = heights[r10+c01];    // c----d
+
+            c_auto dh1 = b - a;
+            c_auto dv1 = c - a;
+            c_auto dh2 = c - d;
+            c_auto dv2 = b - d;
+
+            c_auto x = (float)(dh1 - dh2);
+            c_auto z = (float)(dv1 - dv2);
+
+            c_auto nOoMag = -1.f / sqrtf( x * x + ySqrt + z * z );
+
+            c_auto nor = nOoMag * Float3( x, y, z );
+
+            c_auto NdotL = glm::dot( nor, lightDirLS );
+
+            diffLight[ r00 + c00 ] =
+                (uint8_t)std::clamp( std::max( NdotL * 255.f, 0.f ), 0.f, 255.f );
+        }
+    }
+#endif
 }
 
 //==================================================================
 static void TGEN_CalcBakedColors( auto &terr )
 {
+    auto makeU8 = []( c_auto valf ) -> std::array<uint8_t,3>
+    {
+        c_auto valf8 = glm::clamp( 255.f * valf, Float3(0,0,0), Float3(255,255,255) );
+
+        return { (uint8_t)valf8[0],
+                 (uint8_t)valf8[1],
+                 (uint8_t)valf8[2] };
+    };
+
+    c_auto amb = Float3( 0.3f, 0.3f, 0.3f );
     for (size_t i=0; i < terr.mHeights.size(); ++i)
     {
-        c_auto col3f =
-            glm::clamp(
-                  (terr.mMateID[i] == MATEID_LAND ? CHROM_LAND : CHROM_SEA)
-                * (terr.mTexMono[i] * (1.f/255))
-                * (terr.mIsShadowed[i] ? 0.5f : 1.f)
-                * 255.f,
-                Float3( 0,  0,  0   ),
-                Float3( 255,255,255 ) );
+        c_auto chr = (terr.mMateID[i] == MATEID_LAND ? CHROM_LAND : CHROM_SEA);
+        c_auto tex = (terr.mTexMono[i] * (1.f/255));
+        c_auto dif = (terr.mDiffLight[i] * (1.f/255));
+        c_auto sha = (terr.mIsShadowed[i] ? 0.0f : 1.f);
+
+        c_auto colU8 = makeU8( chr * tex * (amb + dif * sha) );
 
         // assign the final color
-        terr.mBakedCols[i] = { (uint8_t)col3f[0], (uint8_t)col3f[1], (uint8_t)col3f[2], 255 };;
+        terr.mBakedCols[i] = { colU8[0], colU8[1], colU8[2], 255 };
     }
 }
 

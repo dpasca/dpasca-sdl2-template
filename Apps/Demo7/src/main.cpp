@@ -27,7 +27,8 @@ static constexpr float DISP_TERR_SCALE  = 10.f;
 static constexpr float DISP_CAM_NEAR    = 0.01f;    // near plane (1 cm)
 static constexpr float DISP_CAM_FAR     = 1000.f;   // far plane (1000 m)
 
-static const     Float3 LIGHT_DIR       { glm::normalize( Float3( 0.2f, 0.06f, 0.2f ) ) };
+// this is in Local Space, which is equivalent to World Space since obj is fixed at 0
+static const     Float3 LIGHT_DIR_LS    { glm::normalize( Float3( 0.2f, 0.06f, 0.2f ) ) };
 
 struct DemoParams
 {
@@ -43,9 +44,10 @@ struct DemoParams
     uint32_t    GEN_STASIZL2        = 2;       // 4 x 4 initial random samples
     uint32_t    GEN_SEED            = 100;     // random seed
     float       GEN_ROUGH           = 0.5f;
-    bool        GEN_DIFF_LIGHTING   = true;
-    bool        GEN_SHADOWS         = true;
     bool        GEN_WRAP_EDGES      = false;
+
+    bool        LIGHT_ENABLE_DIFF   = true;
+    bool        LIGHT_ENABLE_SHA    = true;
 };
 
 static DemoParams   _sPar;
@@ -227,11 +229,11 @@ static void makeTerrFromParams( auto &terr )
 
     TGEN_FlattenSeaBed( terr );
 
-    if ( _sPar.GEN_DIFF_LIGHTING )
-        TGEN_CalcShadeDiff( terr, LIGHT_DIR );
+    if ( _sPar.LIGHT_ENABLE_DIFF )
+        TGEN_CalcDiffLight( terr, LIGHT_DIR_LS );
 
-    if ( _sPar.GEN_SHADOWS )
-        TGEN_CalcShadows( terr, LIGHT_DIR );
+    if ( _sPar.LIGHT_ENABLE_SHA )
+        TGEN_CalcShadows( terr, LIGHT_DIR_LS );
 
     TGEN_CalcBakedColors( terr );
 }
@@ -258,6 +260,8 @@ static void handleUI( size_t frameCnt, Terrain &terr )
         ImGui::InputScalarN( "Crop", ImGuiDataType_U32, _sPar.DISP_CROP_WH, 2 );
     }
 
+    bool rebuild = false;
+
     if ( header( "Generation" ) )
     {
         auto inputU32 = []( c_auto *pName, uint32_t *pVal, uint32_t step )
@@ -269,24 +273,27 @@ static void handleUI( size_t frameCnt, Terrain &terr )
             return ImGui::SliderScalar( pName, ImGuiDataType_U32, pVal, &mi, &ma, nullptr, 0 );
         };
 
-        bool rebuild = false;
         rebuild |= ImGui::InputFloat( "Max Height", &_sPar.GEN_MAX_H, 0.01f, 0.1f );
         rebuild |= ImGui::InputFloat( "Min Height", &_sPar.GEN_MIN_H, 0.01f, 0.1f );
         rebuild |= slideU32( "Size Log2", &_sPar.GEN_SIZL2, 0, 9 );
         rebuild |= slideU32( "Init Size Log2", &_sPar.GEN_STASIZL2, 0, _sPar.GEN_SIZL2 );
         rebuild |= ImGui::InputFloat( "Roughness", &_sPar.GEN_ROUGH, 0.01f, 0.1f );
         rebuild |= inputU32( "Seed", &_sPar.GEN_SEED, 1 );
-        rebuild |= ImGui::Checkbox( "Diffuse Lighting", &_sPar.GEN_DIFF_LIGHTING );
-        rebuild |= ImGui::Checkbox( "Shadows", &_sPar.GEN_SHADOWS );
         rebuild |= ImGui::Checkbox( "Wrap Edges", &_sPar.GEN_WRAP_EDGES );
+    }
 
-        if ( rebuild )
-        {
-            _sPar.GEN_STASIZL2 = std::min( _sPar.GEN_STASIZL2, _sPar.GEN_SIZL2 );
-            _sPar.GEN_ROUGH    = std::clamp( _sPar.GEN_ROUGH, 0.f, 1.f );
+    if ( header( "Lighting" ) )
+    {
+        rebuild |= ImGui::Checkbox( "Enable Diffuse", &_sPar.LIGHT_ENABLE_DIFF );
+        rebuild |= ImGui::Checkbox( "Enable Shadows", &_sPar.LIGHT_ENABLE_SHA );
+    }
 
-            makeTerrFromParams( terr );
-        }
+    if ( rebuild )
+    {
+        _sPar.GEN_STASIZL2 = std::min( _sPar.GEN_STASIZL2, _sPar.GEN_SIZL2 );
+        _sPar.GEN_ROUGH    = std::clamp( _sPar.GEN_ROUGH, 0.f, 1.f );
+
+        makeTerrFromParams( terr );
     }
 }
 #endif
@@ -313,7 +320,7 @@ inline void debugDraw(
 
     SDL_SetRenderDrawColor( pRend, 0, 255, 0, 90 );
 
-    draw3DLine( Float3(0,0,0), LIGHT_DIR * DISP_TERR_SCALE * 0.5f );
+    draw3DLine( Float3(0,0,0), LIGHT_DIR_LS * DISP_TERR_SCALE * 0.5f );
 }
 
 //==================================================================

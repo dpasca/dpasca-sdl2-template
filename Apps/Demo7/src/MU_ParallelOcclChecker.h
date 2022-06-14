@@ -32,7 +32,7 @@ public:
     //==================================================================
     MU_ParallelOcclChecker(
         const float *pMap,
-        Float3 lightDirWS,
+        Float3 lightDirLS,
         float minY,
         float maxY,
         size_t sizL2 ) :
@@ -42,10 +42,10 @@ public:
             mSizL2(sizL2)
     {
         // do we scan by x (0) or by z (2) ? Find the dominant axis
-        if ( std::abs( lightDirWS[2] ) > std::abs( lightDirWS[0] ) )
+        if ( std::abs( lightDirLS[2] ) > std::abs( lightDirLS[0] ) )
         {
             mMajor = 2;
-            std::swap( lightDirWS[0], lightDirWS[2] );
+            std::swap( lightDirLS[0], lightDirLS[2] );
         }
 
         c_auto siz = (int)(1 << sizL2);
@@ -54,10 +54,10 @@ public:
 
         mLen0   = coordMax;
         mD0n    = 1;
-        mD1n    = lightDirWS[1] / lightDirWS[0] / (float)siz;
-        mD2n    = lightDirWS[2] / lightDirWS[0];
+        mD1n    = lightDirLS[1] / lightDirLS[0] / (float)siz;
+        mD2n    = lightDirLS[2] / lightDirLS[0];
 
-        if ( lightDirWS[0] < 0 )
+        if ( lightDirLS[0] < 0 )
         {
             mLen0   = -mLen0;
             mD0n    = -mD0n;
