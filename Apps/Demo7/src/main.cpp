@@ -12,6 +12,8 @@
 #include <array>
 #include <vector>
 #include <algorithm> // for std::sort
+#include <iostream>
+#include <fstream>
 #include "DBase.h"
 #include "MathBase.h"
 #include "RendBase.h"
@@ -47,7 +49,10 @@ struct DemoParams
     bool        LIGHT_ENABLE_SHA    = true;
     Float3      LIGHT_DIFF_COL      = {1.0f, 1.0f, 1.0f};
     Float3      LIGHT_AMB_COL       = {0.3f, 0.3f, 0.3f};
-    Float2      LIGHT_DIR_LAT_LONG  = {30.f, 0.f};
+    Float2      LIGHT_DIR_LAT_LONG  = {20.f, 70.f};
+
+    std::string EXP_PATHFNAME       {"exported_terr.h"};
+    int         EXP_QUANT_HEIGHT    {45};
 };
 
 static DemoParams   _sPar;
@@ -137,6 +142,22 @@ inline void drawAtom( auto *pRend, const VertDev &vdev )
 }
 
 //==================================================================
+static std::array<size_t,4> makeCropCoords( size_t siz, const uint32_t cropWH[2] )
+{
+    // define the usable crop area (all if 0, otherwise no larger than the map's siz)
+    c_auto useCropW = cropWH[0] ? std::min( (size_t)cropWH[0], siz ) : siz;
+    c_auto useCropH = cropWH[1] ? std::min( (size_t)cropWH[1], siz ) : siz;
+
+    return
+    {
+        (siz - useCropW) / 2, // xi1
+        (siz - useCropH) / 2, // yi1
+        (siz + useCropW) / 2, // xi2
+        (siz + useCropH) / 2, // yi2
+    };
+}
+
+//==================================================================
 static void drawTerrain(
         auto &terr,
         float dispSca,
@@ -150,14 +171,11 @@ static void drawTerrain(
 
     c_auto dxdt = dispSca / (float)siz;
 
-    // define the usable crop area (all if 0, otherwise no larger than the map's siz)
-    c_auto useCropW = cropWH[0] ? std::min( (size_t)cropWH[0], siz ) : siz;
-    c_auto useCropH = cropWH[1] ? std::min( (size_t)cropWH[1], siz ) : siz;
-
-    c_auto xi1 = (siz - useCropW) / 2;
-    c_auto xi2 = (siz + useCropW) / 2;
-    c_auto yi1 = (siz - useCropH) / 2;
-    c_auto yi2 = (siz + useCropH) / 2;
+    c_auto cropRC = makeCropCoords( terr.GetSiz(), cropWH );
+    c_auto xi1 = cropRC[0];
+    c_auto yi1 = cropRC[1];
+    c_auto xi2 = cropRC[2];
+    c_auto yi2 = cropRC[3];
 
     std::vector<VertDev> vertsDev;
     vertsDev.reserve( (yi2 - yi1) * (xi2 - xi1) );
@@ -245,18 +263,108 @@ static void makeTerrFromParams( auto &terr )
     TGEN_CalcBakedColors( terr, _sPar.LIGHT_DIFF_COL, _sPar.LIGHT_AMB_COL );
 }
 
+//==================================================================
+static std::string SSPrintFS( const char *pFmt, ... )
+{
+    char buff[2048] {};
+    va_list vl;
+    va_start( vl, pFmt );
+    vsnprintf( buff, 256, pFmt, vl );
+    va_end( vl );
+
+	return {buff};
+}
+
+//==================================================================
+static void doExportUB8(
+        const Terrain &terr,
+        const std::string &pathFName,
+        const int quantMaxH,
+        const uint32_t cropWH[2] )
+{
+    std::string str;
+
+    c_auto cropRC = makeCropCoords( terr.GetSiz(), cropWH );
+    c_auto xi1 = cropRC[0];
+    c_auto yi1 = cropRC[1];
+    c_auto xi2 = cropRC[2];
+    c_auto yi2 = cropRC[3];
+
+    str += SSPrintFS( "const unsigned int TERR_WD = %zu;\n", xi2 - xi1 );
+    str += SSPrintFS( "const unsigned int TERR_HE = %zu;\n", yi2 - yi1 );
+    str += "\n";
+    str += "const unsigned char terr_data[TERR_HE][TERR_WD] = {\n";
+
+    float srcMinH =  FLT_MAX;
+    float srcMaxH = -FLT_MAX;
+    for (size_t yi=yi1; yi < yi2; ++yi)
+    {
+        c_auto rowCellIdx = yi << terr.GetSizL2();
+        for (size_t xi=xi1; xi < xi2; ++xi)
+        {
+            c_auto cellIdx = xi + rowCellIdx;
+            c_auto srcH = terr.mHeights[ cellIdx ];
+
+            srcMinH = std::min( srcMinH, srcH );
+            srcMaxH = std::max( srcMaxH, srcH );
+        }
+    }
+
+    c_auto ooH = 1.f / (srcMaxH - srcMinH);
+
+    size_t dataIdx = 0;
+    for (size_t yi=yi1; yi < yi2; ++yi)
+    {
+        c_auto rowCellIdx = yi << terr.GetSizL2();
+        for (size_t xi=xi1; xi < xi2; ++xi)
+        {
+            c_auto cellIdx = xi + rowCellIdx;
+
+            c_auto srcH = terr.mHeights[ cellIdx ];
+
+            c_auto quantH = std::clamp(
+                                (int)(quantMaxH * (srcH - srcMinH) * ooH),
+                                0,
+                                quantMaxH );
+
+            str += SSPrintFS( "%3i,", quantH );
+
+            if NOT( ++dataIdx & 31 )
+                str += "\n";
+        }
+    }
+
+    str += "\n};\n";
+
+    // write
+    std::ofstream file;
+    file.open( pathFName );
+    if NOT( file.is_open() )
+    {
+        printf( "** ERROR could not open %s\n", pathFName.c_str() );
+        return;
+    }
+
+    file << str;
+    file.close();
+
+    printf( "** Successfully exported to %s\n", pathFName.c_str() );
+}
+
 #ifdef ENABLE_IMGUI
 //==================================================================
 static void handleUI( size_t frameCnt, Terrain &terr )
 {
     //ImGui::Text( "Frame: %zu", frameCnt );
 
-    auto header = []( c_auto *pName )
+    auto header = []( const std::string &name, bool defOpen )
     {
-        return ImGui::CollapsingHeader( pName, ImGuiTreeNodeFlags_DefaultOpen );
+        return ImGui::CollapsingHeader(
+                    (name + "##head").c_str(),
+                    defOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0);
     };
 
-    if ( header( "Display" ) )
+    if ( header( "Display", true ) )
     {
         ImGui::SliderFloat( "Camera FOV", &_sPar.DISP_CAM_FOV_DEG, 10.f, 120.f );
         ImGui::SliderFloat( "Camera Dist", &_sPar.DISP_CAM_DIST, 0.f, DISP_CAM_FAR/10 );
@@ -269,7 +377,7 @@ static void handleUI( size_t frameCnt, Terrain &terr )
 
     bool rebuild = false;
 
-    if ( header( "Generation" ) )
+    if ( header( "Generation", true ) )
     {
         auto inputU32 = []( c_auto *pName, uint32_t *pVal, uint32_t step )
         {
@@ -289,7 +397,7 @@ static void handleUI( size_t frameCnt, Terrain &terr )
         rebuild |= ImGui::Checkbox( "Wrap Edges", &_sPar.GEN_WRAP_EDGES );
     }
 
-    if ( header( "Lighting" ) )
+    if ( header( "Lighting", false ) )
     {
         rebuild |= ImGui::Checkbox( "Enable Diffuse", &_sPar.LIGHT_ENABLE_DIFF );
         rebuild |= ImGui::Checkbox( "Enable Shadows", &_sPar.LIGHT_ENABLE_SHA );
@@ -321,6 +429,19 @@ static void handleUI( size_t frameCnt, Terrain &terr )
         _sPar.GEN_ROUGH    = std::clamp( _sPar.GEN_ROUGH, 0.f, 1.f );
 
         makeTerrFromParams( terr );
+    }
+
+    if ( header( "Export", false ) )
+    {
+        ImGui::InputText( "Login Name", &_sPar.EXP_PATHFNAME );
+        ImGui::InputInt( "Max Int Height", &_sPar.EXP_QUANT_HEIGHT );
+
+        if ( ImGui::Button( "Export" ) )
+            doExportUB8(
+                    terr,
+                    _sPar.EXP_PATHFNAME,
+                    _sPar.EXP_QUANT_HEIGHT,
+                    _sPar.DISP_CROP_WH );
     }
 }
 #endif
