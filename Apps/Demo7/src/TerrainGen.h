@@ -84,11 +84,11 @@ static void TGEN_CalcShadows( auto &terr, Float3 lightDirWS )
                         terr.mMaxH,
                         terr.mSizeL2 );
 
-    c_auto dim = (int)terr.GetDim();
+    c_auto siz = (int)terr.GetSize();
     size_t cellIdx = 0;
-	for (int yi=0; yi < dim; ++yi)
+	for (int yi=0; yi < siz; ++yi)
 	{
-        for (int xi=0; xi < dim; ++xi, ++cellIdx)
+        for (int xi=0; xi < siz; ++xi, ++cellIdx)
 		{
             terr.mIsShadowed[cellIdx] = checker.IsOccludedAtPoint( xi, yi );
 		}
@@ -96,18 +96,12 @@ static void TGEN_CalcShadows( auto &terr, Float3 lightDirWS )
 }
 
 //==================================================================
-// geenrate colors and flatten the heights below sea level
 static void TGEN_CalcShadeDiff( auto &terr, Float3 lightDirWS )
 {
     lightDirWS = glm::normalize( lightDirWS );
 
-    c_auto dim = (int)terr.GetDim();
-    size_t cellIdx = 0;
-	for (int yi=0; yi < dim; ++yi)
 	{
-        for (int xi=0; xi < dim; ++xi, ++cellIdx)
 		{
-            // TODO
 		}
 	}
 }

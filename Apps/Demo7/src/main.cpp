@@ -136,29 +136,28 @@ static void drawTerrain(
         float deviceH,
         const Matrix44 &proj_obj )
 {
-    c_auto dim = (size_t)1 << terr.mSizeL2;
+    c_auto siz = (size_t)1 << terr.GetSizL2();
 
-    c_auto dxdt = mapDispW / (float)dim;
+    c_auto dxdt = mapDispW / (float)siz;
     c_auto xoff = -mapDispW / 2;
 
-    // define the usable crop area (all if 0, otherwise no larger than the map's dim)
-    c_auto useCropW = cropWH[0] ? std::min( (size_t)cropWH[0], dim ) : dim;
-    c_auto useCropH = cropWH[1] ? std::min( (size_t)cropWH[1], dim ) : dim;
+    // define the usable crop area (all if 0, otherwise no larger than the map's siz)
+    c_auto useCropW = cropWH[0] ? std::min( (size_t)cropWH[0], siz ) : siz;
+    c_auto useCropH = cropWH[1] ? std::min( (size_t)cropWH[1], siz ) : siz;
 
-    c_auto xi1 = (dim - useCropW) / 2;
-    c_auto xi2 = (dim + useCropW) / 2;
-    c_auto yi1 = (dim - useCropH) / 2;
-    c_auto yi2 = (dim + useCropH) / 2;
+    c_auto xi1 = (siz - useCropW) / 2;
+    c_auto xi2 = (siz + useCropW) / 2;
+    c_auto yi1 = (siz - useCropH) / 2;
+    c_auto yi2 = (siz + useCropH) / 2;
 
     std::vector<VertDev> vertsDev;
     vertsDev.reserve( (yi2 - yi1) * (xi2 - xi1) );
 
-    size_t cellIdx = 0;
     for (size_t yi=yi1; yi < yi2; ++yi)
     {
         c_auto y = xoff + dxdt * (yi + 1);
 
-        c_auto rowCellIdx = yi << terr.mSizeL2;
+        c_auto rowCellIdx = yi << terr.GetSizL2();
         for (size_t xi=xi1; xi < xi2; ++xi)
         {
             c_auto x = xoff + dxdt * (xi + 1);
@@ -201,7 +200,7 @@ static void makeTerrFromParams( auto &terr )
     // fill it with "plasma"
     Plasma2::Params par;
     par.pDest       = terr.mHeights.data(); // destination values
-    par.sizL2       = terr.mSizeL2;         // log2 of size (i.e. 7 = 128 pixels width/height)
+    par.sizL2       = terr.GetSizL2();      // log2 of size (i.e. 7 = 128 pixels width/height)
     par.baseSizL2   = _sPar.GEN_STASIZL2;// log2 of size of initial low res map
     par.seed        = _sPar.GEN_SEED;
     par.rough       = _sPar.GEN_ROUGH;
@@ -219,8 +218,8 @@ static void makeTerrFromParams( auto &terr )
     if ( _sPar.GEN_WRAP_EDGES )
     {
         // we wrap by cross-blending the extreme 1/3 of the samples at the edges
-        c_auto wrapSiz = ((size_t)1 << terr.mSizeL2) / 3;
-        MU_WrapMap<float,1>( terr.mHeights.data(), terr.mSizeL2, wrapSiz );
+        c_auto wrapSiz = terr.GetSiz() / 3;
+        MU_WrapMap<float,1>( terr.mHeights.data(), terr.GetSizL2(), wrapSiz );
     }
 
     TGEN_MakeMateAndTex( terr );

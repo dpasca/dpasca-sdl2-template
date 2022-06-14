@@ -52,7 +52,8 @@ public:
         mBakedCols  = std::vector<RBColType>( n, RBColType{255,0,255,255} );
     }
 
-    size_t GetDim() const { return (size_t)1 << mSizeL2; }
+    size_t GetSizL2() const { return mSizeL2; }
+    size_t GetSiz() const { return (size_t)1 << mSizeL2; }
 
     //size_t MakeIndexXY( size_t x, size_t y ) const { return x + (y << mSizeL2); }
 };
