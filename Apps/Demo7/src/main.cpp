@@ -51,7 +51,8 @@ struct DemoParams
     Float2      LIGHT_DIR_LAT_LONG  = {20.f, 70.f};
 
     std::string EXP_PATHFNAME       {"exported_terr.h"};
-    int         EXP_QUANT_HEIGHT    {45};
+    int         EXP_QUANT_HEIGHT    {46};
+    int         EXP_QUANT_SHADE     {8};
 };
 
 static DemoParams   _sPar;
@@ -329,13 +330,15 @@ static void handleUI( size_t frameCnt, Terrain &terr )
     if ( header( "Export", false ) )
     {
         ImGui::InputText( "Login Name", &_sPar.EXP_PATHFNAME );
-        ImGui::InputInt( "Max Int Height", &_sPar.EXP_QUANT_HEIGHT );
+        ImGui::InputInt( "Height levels", &_sPar.EXP_QUANT_HEIGHT );
+        ImGui::InputInt( "Shade Levels", &_sPar.EXP_QUANT_SHADE );
 
         if ( ImGui::Button( "Export" ) )
             TerrainExport(
                     terr,
                     _sPar.EXP_PATHFNAME,
                     _sPar.EXP_QUANT_HEIGHT,
+                    _sPar.EXP_QUANT_SHADE,
                     _sPar.DISP_CROP_WH );
     }
 }
