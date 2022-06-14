@@ -10,6 +10,7 @@
 #define TERRAIN_H
 
 #include <vector>
+#include <array>
 #include "DBase.h"
 #include "MathBase.h"
 #include "RendBase.h"
@@ -58,6 +59,21 @@ public:
     //size_t MakeIndexXY( size_t x, size_t y ) const { return x + (y << mSizeL2); }
 };
 
+//==================================================================
+inline std::array<size_t,4> TERR_MakeCropRC( size_t siz, const uint32_t cropWH[2] )
+{
+    // define the usable crop area (all if 0, otherwise no larger than the map's siz)
+    c_auto useCropW = cropWH[0] ? std::min( (size_t)cropWH[0], siz ) : siz;
+    c_auto useCropH = cropWH[1] ? std::min( (size_t)cropWH[1], siz ) : siz;
+
+    return
+    {
+        (siz - useCropW) / 2, // xi1
+        (siz - useCropH) / 2, // yi1
+        (siz + useCropW) / 2, // xi2
+        (siz + useCropH) / 2, // yi2
+    };
+}
 
 #endif
 
