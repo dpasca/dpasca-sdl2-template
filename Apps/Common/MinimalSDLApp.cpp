@@ -50,6 +50,7 @@ Usage
 
 Options
   --help                       : This help
+  --use_swrenderer             : Create a software rendering surface
   --autoexit_delay <frames>    : Automatically exit after a number of frames
   --autoexit_savesshot <fname> : Save a screenshot on automatic exit
 )RAW", argv[0] );
@@ -76,6 +77,10 @@ Options
         {
             printUsage(0);
             exit( 0 );
+        }
+        else if ( isparam("--use_swrenderer") )
+        {
+            mUseSWRender = true;
         }
         else if ( isparam("--autoexit_delay") )
         {
@@ -135,13 +140,22 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h )
     glGetIntegerv( GL_MINOR_VERSION, &mUsingGLVersion_Minor );
 #endif
 
-    // create the surface
-    mpSurface = SDL_GetWindowSurface( mpWindow );
-    if ( !mpSurface )
-        exitErrSDL( "SDL_GetWindowSurface failed" );
+    if ( mUseSWRender )
+    {
+        // create the surface
+        mpSurface = SDL_GetWindowSurface( mpWindow );
+        if ( !mpSurface )
+            exitErrSDL( "SDL_GetWindowSurface failed" );
 
-    // create the renderer
-    mpRenderer = SDL_CreateSoftwareRenderer( mpSurface );
+        // create the renderer
+        mpRenderer = SDL_CreateSoftwareRenderer( mpSurface );
+    }
+    else
+    {
+        // create the renderer
+        mpRenderer = SDL_CreateRenderer( mpWindow, -1, SDL_RENDERER_ACCELERATED |
+                                                       SDL_RENDERER_PRESENTVSYNC );
+    }
 
     if ( !mpRenderer )
         exitErrSDL( "SDL_CreateSoftwareRenderer failed" );
@@ -245,15 +259,22 @@ void MinimalSDLApp::EndFrame()
     if ( !mExitFrameN )
     {
         const auto curTimeS = getSteadyTimeSecs();
-        const auto elapsedS = curTimeS - mLastFrameTimeS;
 
-        if ( elapsedS < TARGET_FRAME_TIME_S )
-            SDL_Delay( (uint32_t)((TARGET_FRAME_TIME_S - elapsedS) * 1000) );
+        if ( mUseSWRender )
+        {
+            const auto elapsedS = curTimeS - mLastFrameTimeS;
+
+            if ( elapsedS < TARGET_FRAME_TIME_S )
+                SDL_Delay( (uint32_t)((TARGET_FRAME_TIME_S - elapsedS) * 1000) );
+        }
 
         mLastFrameTimeS = curTimeS;
     }
 
-    SDL_UpdateWindowSurface( mpWindow );
+    if ( mUseSWRender )
+        SDL_UpdateWindowSurface( mpWindow );
+    else
+        SDL_RenderPresent( mpRenderer );
 
     mFrameCnt += 1;
 }
@@ -280,9 +301,12 @@ void MinimalSDLApp::SaveScreenshot( const std::string &pathFName )
 {
     const auto fmt = SDL_PIXELFORMAT_RGB888;
 
-    auto *pTmpSurf = SDL_CreateRGBSurfaceWithFormat(
-                            0, mpSurface->w, mpSurface->h, 24, fmt );
+    int w {};
+    int h {};
+    if ( SDL_GetRendererOutputSize( mpRenderer, &w, &h ) )
+        return;
 
+    auto *pTmpSurf = SDL_CreateRGBSurfaceWithFormat( 0, w, h, 24, fmt );
     SDL_RenderReadPixels( mpRenderer, nullptr, fmt, pTmpSurf->pixels, pTmpSurf->pitch );
     SDL_SaveBMP( pTmpSurf, pathFName.c_str() );
     SDL_FreeSurface( pTmpSurf );

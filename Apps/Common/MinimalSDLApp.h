@@ -23,6 +23,7 @@ class MinimalSDLApp
     size_t          mFrameCnt       {};
     double          mLastFrameTimeS {};
 
+    bool            mUseSWRender    {};
     size_t          mExitFrameN {};
     std::string     mSaveSShotPFName;
 
