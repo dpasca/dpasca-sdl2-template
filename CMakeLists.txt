@@ -6,7 +6,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake_modules")
 # specify to use Unity Builds
 set(BUILD_UNITY FALSE)
 
-# enable ImGui
 set(ENABLE_IMGUI TRUE)
 
 set(ENABLE_OPENGL FALSE)
@@ -101,8 +100,40 @@ if (EMSCRIPTEN)
 endif()
 
 #==================================================================
-# externals
+# externals: OpenGL
+if (ENABLE_OPENGL)
+    cmake_policy(SET CMP0072 NEW)
+    find_package(OpenGL)
 
+    # for emscripten it's GLES
+    if (EMSCRIPTEN)
+        set(IS_GLES TRUE)
+        set(USE_FULLES3 FALSE)
+        set(USE_WEBGL2 TRUE)
+
+        # NOTE: the find package above simply puts "nul" OPENGL_LIBRARIES
+        if (USE_FULLES3)
+            SET(OPENGL_LIBRARIES "-sUSE_WEBGL2=1 -sFULL_ES3=1")
+        elseif (USE_WEBGL2)
+            add_definitions( -DUSE_WEBGL -DUSE_WEBGL2 )
+            SET(OPENGL_LIBRARIES "-sUSE_WEBGL2=1")
+        else()
+            add_definitions( -DUSE_WEBGL -DUSE_WEBGL1 )
+            SET(OPENGL_LIBRARIES "-sUSE_WEBGL2=0")
+        endif()
+    endif()
+
+    # glew is only included if it's not GLES
+    if (OpenGL_FOUND AND (NOT ANDROID AND NOT EMSCRIPTEN))
+        include_directories( externals/local/glew_base/include )
+        add_subdirectory( externals/local/glew_base )
+        add_definitions( -DGLEW_STATIC )
+
+        set(GLEW_LIBS glew)
+    endif()
+endif() # ENABLE_OPENGL
+
+# externals: SDL
 if (EMSCRIPTEN)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sUSE_SDL=2")
 else()
@@ -124,6 +155,7 @@ else()
     include_directories( _externals/SDL/include )
 endif()
 
+# externals: ImGui
 if (ENABLE_IMGUI)
     add_definitions( -DENABLE_IMGUI )
 
@@ -149,8 +181,16 @@ if (NOT EMSCRIPTEN)
     if (APPLE OR UNIX)
         set(PLATFORM_LINK_LIBS -pthread -lpthread)
     endif()
+
+    if (OpenGL_FOUND)
+        set(GFX_LINK_LIBS ${GLEW_LIBS} ${OPENGL_LIBRARIES})
+    endif()
 else()
     set(PLATFORM_LINK_LIBS -wWASM=1 -sDISABLE_EXCEPTION_CATCHING=0)
+
+    if (ENABLE_OPENGL)
+        set(GFX_LINK_LIBS ${OPENGL_LIBRARIES})
+    endif()
 endif()
 
 function(add_subdirectory_if_exists DIR)
