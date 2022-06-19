@@ -6,8 +6,6 @@
 /// copyright info.
 //==================================================================
 
-#define USE_OGL
-
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,9 +21,7 @@
 #include "TerrainGen.h"
 #include "TerrainExport.h"
 #include "MU_WrapMap.h"
-#ifdef USE_OGL
-# include "ImmGL.h"
-#endif
+#include "ImmGL.h"
 #include "MinimalSDLApp.h"
 
 //==================================================================
@@ -96,11 +92,7 @@ struct VertDev
 };
 
 //==================================================================
-inline VertDev makeDeviceVert(
-                    const Matrix44 &xform,
-                    const VertObj &vobj,
-                    float deviceW,
-                    float deviceH )
+inline VertDev makeScreenVert( const Matrix44 &xform, const VertObj &vobj )
 {
     VertDev vdev;
 
@@ -114,22 +106,12 @@ inline VertDev makeDeviceVert(
     // in the range -1..1 for x,y and 0..1 for z
     c_auto oow = 1.f / posH.w;
 
-#ifdef USE_OGL
     vdev.pos[0] = posH[0] * oow;
     vdev.pos[1] = posH[1] * oow;
-#else
-    vdev.pos[0] = deviceW * (posH[0] * oow + 1) * 0.5f;
-    vdev.pos[1] = deviceH * (1 - posH[1] * oow) * 0.5f;
-#endif
     vdev.pos[2] = posH[2] * oow;
 
-#ifdef USE_OGL
     vdev.siz[0] = vobj.siz * oow;
     vdev.siz[1] = vobj.siz * oow;
-#else
-    vdev.siz[0] = deviceW * vobj.siz * oow;
-    vdev.siz[1] = deviceH * vobj.siz * oow;
-#endif
     vdev.col = vobj.col;
 
     return vdev;
@@ -142,29 +124,19 @@ inline bool isValidDeviceVert( const Float3 &vert )
 }
 
 //==================================================================
-inline void drawAtom( auto *pRend, const VertDev &vdev )
+inline void drawAtom( auto &immgl, const VertDev &vdev )
 {
     c_auto w = vdev.siz[0];
     c_auto h = vdev.siz[1];
     c_auto x = (float)(vdev.pos[0] - w*0.5f);
     c_auto y = (float)(vdev.pos[1] - h*0.5f);
-#ifdef USE_OGL
-    pRend->DrawRectFill( x, y, vdev.pos[2], w, h,
+
+    immgl.DrawRectFill( x, y, vdev.pos[2], w, h,
             IColor4({
                 vdev.col[0] * (1.f/255),
                 vdev.col[1] * (1.f/255),
                 vdev.col[2] * (1.f/255),
                 vdev.col[3] * (1.f/255) }) );
-#else
-    c_auto c = vdev.col;
-    SDL_SetRenderDrawColor( pRend, c[0], c[1], c[2], c[3] );
-    SDL_FRect rc;
-    rc.x = x;
-    rc.y = y;
-    rc.w = w;
-    rc.h = h;
-    SDL_RenderFillRectF( pRend, &rc );
-#endif
 }
 
 //==================================================================
@@ -172,9 +144,7 @@ static void drawTerrain(
         auto &terr,
         float dispSca,
         const uint32_t cropWH[2],
-        auto *pRend,
-        float deviceW,
-        float deviceH,
+        auto &immgl,
         const Matrix44 &proj_obj )
 {
     c_auto siz = terr.GetSiz();
@@ -186,9 +156,6 @@ static void drawTerrain(
     c_auto yi1 = cropRC[1];
     c_auto xi2 = cropRC[2];
     c_auto yi2 = cropRC[3];
-
-    std::vector<VertDev> vertsDev;
-    vertsDev.reserve( (yi2 - yi1) * (xi2 - xi1) );
 
     c_auto oosiz = 1.f / siz;
     for (size_t yi=yi1; yi < yi2; ++yi)
@@ -204,28 +171,17 @@ static void drawTerrain(
 
             VertObj vobj;
             vobj.pos = dispSca * Float3( x, terr.mHeights[ cellIdx ], y );
-            vobj.siz = dxdt;
+            vobj.siz = dxdt * 1.5f;
             vobj.col = terr.mBakedCols[ cellIdx ];
 
             // convert from object-space to device-space (2D display dimensions)
-            c_auto vout = makeDeviceVert( proj_obj, vobj, deviceW, deviceH );
+            c_auto vout = makeScreenVert( proj_obj, vobj );
 
             // store the vertex
             if ( vout.pos[2] > 0 )
-                vertsDev.push_back( vout );
+                drawAtom( immgl, vout );
         }
     }
-
-#ifndef USE_OGL
-    // sort with bigger Z first
-    std::sort( vertsDev.begin(), vertsDev.end(), []( c_auto &l, c_auto &r )
-    {
-        return l.pos[2] > r.pos[2];
-    });
-#endif
-    // finally render the verts
-    for (c_auto &v : vertsDev)
-        drawAtom( pRend, v );
 }
 
 //==================================================================
@@ -373,18 +329,15 @@ static void handleUI( size_t frameCnt, Terrain &terr )
 
 //==================================================================
 inline void debugDraw(
-                auto *pRend,
-                float deviceW,
-                float deviceH,
+                auto &immgl,
                 const Matrix44 &proj_obj )
 {
-#ifdef USE_OGL
-#else
+#if 0
     auto draw3DLine = [&]( const Float3 &pos1, const Float3 &pos2 )
     {
         // convert from object-space to device-space (2D display dimensions)
-        c_auto v1 = makeDeviceVert( proj_obj, VertObj{pos1}, deviceW, deviceH );
-        c_auto v2 = makeDeviceVert( proj_obj, VertObj{pos2}, deviceW, deviceH );
+        c_auto v1 = makeScreenVert( proj_obj, VertObj{pos1} );
+        c_auto v2 = makeScreenVert( proj_obj, VertObj{pos2} );
 
         c_auto v1p = v1.pos;
         c_auto v2p = v2.pos;
@@ -405,14 +358,11 @@ inline void debugDraw(
 int main( int argc, char *argv[] )
 {
     MinimalSDLApp app( argc, argv, 1024, 768, 0
-#ifdef USE_OGL
                     | MinimalSDLApp::FLAG_OPENGL
-#endif
                     | MinimalSDLApp::FLAG_RESIZABLE
                     );
-#ifdef USE_OGL
+
     ImmGL immgl;
-#endif
 
     Terrain terr;
     makeTerrFromParams( terr );
@@ -427,22 +377,13 @@ int main( int argc, char *argv[] )
 #ifdef ENABLE_IMGUI
         app.DrawMainUIWin( [&]() { handleUI( frameCnt, terr ); } );
 #endif
-#ifdef USE_OGL
         glViewport(0, 0, app.GetDispSize()[0], app.GetDispSize()[1]);
         glClearColor( 0, 0, 0, 0 );
         glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-
         glEnable( GL_DEPTH_TEST );
 
-        auto *pRend = &immgl;
-        pRend->ResetStates();
-#else
-        // get the renderer
-        auto *pRend = app.GetRenderer();
+        immgl.ResetStates();
 
-        SDL_SetRenderDrawColor( pRend, 0, 0, 0, 0 );
-        SDL_RenderClear( pRend );
-#endif
         // animate
         if ( _sPar.DISP_ANIM_YAW )
         {
@@ -481,21 +422,18 @@ int main( int argc, char *argv[] )
                 terr,
                 DISP_TERR_SCALE,
                 _sPar.DISP_CROP_WH,
-                pRend,
-                (float)curW,
-                (float)curH,
+                immgl,
                 proj_obj );
 
         //
         if ( _sForceDebugRendCnt )
         {
             _sForceDebugRendCnt -= 1;
-            debugDraw( pRend, (float)curW, (float)curH, proj_obj );
+            debugDraw( immgl, proj_obj );
         }
 
-#ifdef USE_OGL
-        pRend->FlushPrims();
-#endif
+        immgl.FlushPrims();
+
         // end of the frame (will present)
         app.EndFrame();
     }
