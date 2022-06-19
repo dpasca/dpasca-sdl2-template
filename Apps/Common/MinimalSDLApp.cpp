@@ -17,9 +17,8 @@
 # ifdef ENABLE_OPENGL
 #  include "imgui_impl_opengl3.h"
 #  include "imgui_impl_opengl2.h"
-# else
-#  include "imgui_impl_sdlrenderer.h"
 # endif
+# include "imgui_impl_sdlrenderer.h"
 # include "imgui_internal.h"
 #endif
 #include "MinimalSDLApp.h"
@@ -106,7 +105,7 @@ static std::string getFNameStem( const char *pPathFName )
 }
 
 //==================================================================
-MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h )
+MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
 {
     ctor_parseArgs( argc, argv );
 
@@ -133,30 +132,33 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h )
         exitErrSDL( "SDL_Init failed" );
 
 #ifdef ENABLE_OPENGL
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+    if ( flags & FLAG_OPENGL )
+    {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
 #  ifdef IS_GLES
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 #  else
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 #  endif
 # ifdef USE_WEBGL1
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 # else
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 # endif
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 
-    //SDL_GL_SetAttribute( SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1 );
+        //SDL_GL_SetAttribute( SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1 );
+    }
 #endif
 
     // create the window
     const auto winFlags = (SDL_WindowFlags)(
 #ifdef ENABLE_OPENGL
-                            SDL_WINDOW_OPENGL |
+                        ((flags & FLAG_OPENGL)    ? SDL_WINDOW_OPENGL : 0) |
 #endif
-                            //SDL_WINDOW_RESIZABLE |
-                            //SDL_WINDOW_ALLOW_HIGHDPI |
-                            SDL_WINDOW_SHOWN);
+                        ((flags & FLAG_RESIZABLE) ? SDL_WINDOW_RESIZABLE  : 0) |
+                        //SDL_WINDOW_ALLOW_HIGHDPI |
+                        SDL_WINDOW_SHOWN );
 
     mpWindow = SDL_CreateWindow(
                         title.c_str(),
@@ -167,15 +169,18 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h )
         exitErrSDL( "Window creation fail" );
 
 #ifdef ENABLE_OPENGL
-    mpSDLGLContext = SDL_GL_CreateContext( mpWindow );
+    if ( flags & FLAG_OPENGL )
+    {
+        mpSDLGLContext = SDL_GL_CreateContext( mpWindow );
 
-    if ( GLEW_OK != glewInit() )
-        exitErr( "Failed to initialize GLEW" );
+        if ( GLEW_OK != glewInit() )
+            exitErr( "Failed to initialize GLEW" );
 
-    SDL_GL_MakeCurrent( mpWindow, mpSDLGLContext );
+        SDL_GL_MakeCurrent( mpWindow, mpSDLGLContext );
 
-    glGetIntegerv( GL_MAJOR_VERSION, &mUsingGLVersion_Major );
-    glGetIntegerv( GL_MINOR_VERSION, &mUsingGLVersion_Minor );
+        glGetIntegerv( GL_MAJOR_VERSION, &mUsingGLVersion_Major );
+        glGetIntegerv( GL_MINOR_VERSION, &mUsingGLVersion_Minor );
+    }
 #endif
 
     if ( mUseSWRender )
@@ -203,22 +208,27 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h )
     ImGui::StyleColorsDark();
 
 # ifdef ENABLE_OPENGL
-    ImGui_ImplSDL2_InitForOpenGL( mpWindow, mpSDLGLContext );
-    if ( mUsingGLVersion_Major >= 3 )
+    if ( mpSDLGLContext )
     {
-        const char *pGLSLVer = mUsingGLVersion_Major > 3 || mUsingGLVersion_Minor >= 2
-                                    ? "#version 150"
-                                    : "#version 130";
-        ImGui_ImplOpenGL3_Init( pGLSLVer );
+        ImGui_ImplSDL2_InitForOpenGL( mpWindow, mpSDLGLContext );
+        if ( mUsingGLVersion_Major >= 3 )
+        {
+            const char *pGLSLVer = mUsingGLVersion_Major > 3 || mUsingGLVersion_Minor >= 2
+                                        ? "#version 150"
+                                        : "#version 130";
+            ImGui_ImplOpenGL3_Init( pGLSLVer );
+        }
+        else
+        {
+            ImGui_ImplOpenGL2_Init();
+        }
     }
     else
-    {
-        ImGui_ImplOpenGL2_Init();
-    }
-# else
-    ImGui_ImplSDL2_InitForSDLRenderer( mpWindow, mpRenderer );
-    ImGui_ImplSDLRenderer_Init( mpRenderer );
 # endif
+    {
+        ImGui_ImplSDL2_InitForSDLRenderer( mpWindow, mpRenderer );
+        ImGui_ImplSDLRenderer_Init( mpRenderer );
+    }
 #endif
 }
 
@@ -262,13 +272,19 @@ bool MinimalSDLApp::BeginFrame()
 
 #ifdef ENABLE_IMGUI
 # ifdef ENABLE_OPENGL
-    if ( mUsingGLVersion_Major >= 3 )
-        ImGui_ImplOpenGL3_NewFrame();
+    if ( mpSDLGLContext )
+    {
+        if ( mUsingGLVersion_Major >= 3 )
+            ImGui_ImplOpenGL3_NewFrame();
+        else
+            ImGui_ImplOpenGL2_NewFrame();
+    }
     else
-        ImGui_ImplOpenGL2_NewFrame();
-# else
-    ImGui_ImplSDLRenderer_NewFrame();
-# endif
+#endif
+    {
+        ImGui_ImplSDLRenderer_NewFrame();
+    }
+
     ImGui_ImplSDL2_NewFrame( mpWindow );
 
     ImGui::NewFrame();
@@ -283,15 +299,20 @@ void MinimalSDLApp::EndFrame()
 #ifdef ENABLE_IMGUI
     ImGui::Render();
 # ifdef ENABLE_OPENGL
-    glViewport( 0, 0, GetDispSize()[0], GetDispSize()[1] );
+    if ( mpSDLGLContext )
+    {
+        glViewport( 0, 0, GetDispSize()[0], GetDispSize()[1] );
 
-    if ( mUsingGLVersion_Major >= 3 )
-        ImGui_ImplOpenGL3_RenderDrawData( ImGui::GetDrawData() );
+        if ( mUsingGLVersion_Major >= 3 )
+            ImGui_ImplOpenGL3_RenderDrawData( ImGui::GetDrawData() );
+        else
+            ImGui_ImplOpenGL2_RenderDrawData( ImGui::GetDrawData() );
+    }
     else
-        ImGui_ImplOpenGL2_RenderDrawData( ImGui::GetDrawData() );
-# else
-    ImGui_ImplSDLRenderer_RenderDrawData( ImGui::GetDrawData() );
 # endif
+    {
+        ImGui_ImplSDLRenderer_RenderDrawData( ImGui::GetDrawData() );
+    }
 #endif
 
     // rudimentary frame sync, only if we're not in auto-exit mode
@@ -313,11 +334,14 @@ void MinimalSDLApp::EndFrame()
     if ( mUseSWRender )
         SDL_UpdateWindowSurface( mpWindow );
     else
+    {
 #ifdef ENABLE_OPENGL
-        SDL_GL_SwapWindow( mpWindow );
-#else
-        SDL_RenderPresent( mpRenderer );
+        if ( mpSDLGLContext )
+            SDL_GL_SwapWindow( mpWindow );
+        else
 #endif
+            SDL_RenderPresent( mpRenderer );
+    }
 
     mFrameCnt += 1;
 }

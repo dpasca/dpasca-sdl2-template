@@ -23,6 +23,8 @@
 #include "MU_WrapMap.h"
 #include "MinimalSDLApp.h"
 
+//#define USE_OGL
+
 //==================================================================
 static constexpr float DISP_TERR_SCALE  = 10.f;
 
@@ -375,10 +377,12 @@ inline void debugDraw(
 //==================================================================
 int main( int argc, char *argv[] )
 {
-    constexpr int  W = 1024;
-    constexpr int  H = 768;
-
-    MinimalSDLApp app( argc, argv, W, H );
+    MinimalSDLApp app( argc, argv, 1024, 768, 0
+#ifdef USE_OGL
+                    | MinimalSDLApp::FLAG_OPENGL
+#endif
+                    | MinimalSDLApp::FLAG_RESIZABLE
+                    );
 
     Terrain terr;
     makeTerrFromParams( terr );
@@ -397,7 +401,7 @@ int main( int argc, char *argv[] )
         auto *pRend = app.GetRenderer();
 
         // clear the device
-#ifdef ENABLE_OPENGL
+#ifdef USE_OGL
         glViewport(0, 0, app.GetDispSize()[0], app.GetDispSize()[1]);
         glClearColor( 0, 0, 0, 0 );
         glClear( GL_COLOR_BUFFER_BIT );
@@ -426,10 +430,12 @@ int main( int argc, char *argv[] )
             return m;
         }();
 
+        c_auto [curW, curH] = app.GetDispSize();
+
         // camera -> projection matrix
         c_auto proj_camera = glm::perspective(
                                 DEG2RAD( _sPar.DISP_CAM_FOV_DEG ),  // FOV
-                                (float)W / H,                       // aspect ratio
+                                (float)curW / curH,                       // aspect ratio
                                 DISP_CAM_NEAR,
                                 DISP_CAM_FAR );
 
@@ -442,15 +448,15 @@ int main( int argc, char *argv[] )
                 DISP_TERR_SCALE,
                 _sPar.DISP_CROP_WH,
                 pRend,
-                W,
-                H,
+                (float)curW,
+                (float)curH,
                 proj_obj );
 
         //
         if ( _sForceDebugRendCnt )
         {
             _sForceDebugRendCnt -= 1;
-            debugDraw( pRend, W, H, proj_obj );
+            debugDraw( pRend, (float)curW, (float)curH, proj_obj );
         }
 
         // end of the frame (will present)

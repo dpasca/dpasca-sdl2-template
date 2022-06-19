@@ -36,7 +36,13 @@ class MinimalSDLApp
     int             mUsingGLVersion_Minor {};
 #endif
 public:
-    MinimalSDLApp( int argc, char *argv[], int w, int h );
+    enum : int
+    {
+        FLAG_RESIZABLE  = 1,
+        FLAG_OPENGL     = 2,
+    };
+
+    MinimalSDLApp( int argc, char *argv[], int w, int h, int flags=0 );
     ~MinimalSDLApp();
 
     bool BeginFrame();
