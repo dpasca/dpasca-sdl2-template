@@ -6,6 +6,8 @@
 /// copyright info.
 //==================================================================
 
+#define USE_OGL
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,9 +23,10 @@
 #include "TerrainGen.h"
 #include "TerrainExport.h"
 #include "MU_WrapMap.h"
+#ifdef USE_OGL
+# include "ImmGL.h"
+#endif
 #include "MinimalSDLApp.h"
-
-//#define USE_OGL
 
 //==================================================================
 static constexpr float DISP_TERR_SCALE  = 10.f;
@@ -111,13 +114,22 @@ inline VertDev makeDeviceVert(
     // in the range -1..1 for x,y and 0..1 for z
     c_auto oow = 1.f / posH.w;
 
+#ifdef USE_OGL
+    vdev.pos[0] = posH[0] * oow;
+    vdev.pos[1] = posH[1] * oow;
+#else
     vdev.pos[0] = deviceW * (posH[0] * oow + 1) * 0.5f;
     vdev.pos[1] = deviceH * (1 - posH[1] * oow) * 0.5f;
+#endif
     vdev.pos[2] = posH[2] * oow;
 
+#ifdef USE_OGL
+    vdev.siz[0] = vobj.siz * oow;
+    vdev.siz[1] = vobj.siz * oow;
+#else
     vdev.siz[0] = deviceW * vobj.siz * oow;
     vdev.siz[1] = deviceH * vobj.siz * oow;
-
+#endif
     vdev.col = vobj.col;
 
     return vdev;
@@ -132,16 +144,26 @@ inline bool isValidDeviceVert( const Float3 &vert )
 //==================================================================
 inline void drawAtom( auto *pRend, const VertDev &vdev )
 {
+    c_auto w = vdev.siz[0];
+    c_auto h = vdev.siz[1];
+    c_auto x = (float)(vdev.pos[0] - w*0.5f);
+    c_auto y = (float)(vdev.pos[1] - h*0.5f);
+#ifdef USE_OGL
+    pRend->DrawRectFill( x, y, w, h, IColor4({
+                                        vdev.col[0] * (1.f/255),
+                                        vdev.col[1] * (1.f/255),
+                                        vdev.col[2] * (1.f/255),
+                                        vdev.col[3] * (1.f/255) }) );
+#else
     c_auto c = vdev.col;
     SDL_SetRenderDrawColor( pRend, c[0], c[1], c[2], c[3] );
     SDL_FRect rc;
-    c_auto w = vdev.siz[0];
-    c_auto h = vdev.siz[1];
-    rc.x = (float)(vdev.pos[0] - w*0.5f);
-    rc.y = (float)(vdev.pos[1] - h*0.5f);
+    rc.x = x;
+    rc.y = y;
     rc.w = w;
     rc.h = h;
     SDL_RenderFillRectF( pRend, &rc );
+#endif
 }
 
 //==================================================================
@@ -354,6 +376,8 @@ inline void debugDraw(
                 float deviceH,
                 const Matrix44 &proj_obj )
 {
+#ifdef USE_OGL
+#else
     auto draw3DLine = [&]( const Float3 &pos1, const Float3 &pos2 )
     {
         // convert from object-space to device-space (2D display dimensions)
@@ -372,6 +396,7 @@ inline void debugDraw(
     draw3DLine(
             Float3(0,0,0),
             calcLightDir( _sPar.LIGHT_DIR_LAT_LONG ) * DISP_TERR_SCALE * 0.5f );
+#endif
 }
 
 //==================================================================
@@ -383,6 +408,9 @@ int main( int argc, char *argv[] )
 #endif
                     | MinimalSDLApp::FLAG_RESIZABLE
                     );
+#ifdef USE_OGL
+    ImmGL immgl;
+#endif
 
     Terrain terr;
     makeTerrFromParams( terr );
@@ -397,15 +425,17 @@ int main( int argc, char *argv[] )
 #ifdef ENABLE_IMGUI
         app.DrawMainUIWin( [&]() { handleUI( frameCnt, terr ); } );
 #endif
-        // get the renderer
-        auto *pRend = app.GetRenderer();
-
-        // clear the device
 #ifdef USE_OGL
         glViewport(0, 0, app.GetDispSize()[0], app.GetDispSize()[1]);
         glClearColor( 0, 0, 0, 0 );
         glClear( GL_COLOR_BUFFER_BIT );
+
+        auto *pRend = &immgl;
+        pRend->ResetStates();
 #else
+        // get the renderer
+        auto *pRend = app.GetRenderer();
+
         SDL_SetRenderDrawColor( pRend, 0, 0, 0, 0 );
         SDL_RenderClear( pRend );
 #endif
@@ -459,6 +489,9 @@ int main( int argc, char *argv[] )
             debugDraw( pRend, (float)curW, (float)curH, proj_obj );
         }
 
+#ifdef USE_OGL
+        pRend->FlushPrims();
+#endif
         // end of the frame (will present)
         app.EndFrame();
     }

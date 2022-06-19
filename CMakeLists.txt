@@ -8,7 +8,7 @@ set(BUILD_UNITY FALSE)
 
 set(ENABLE_IMGUI TRUE)
 
-set(ENABLE_OPENGL FALSE)
+set(ENABLE_OPENGL TRUE)
 
 #=============================================
 project (dpasca-sdl2-template)
