@@ -26,6 +26,7 @@ add_executable( ${PROJECT_NAME}
 target_link_libraries( ${PROJECT_NAME}
     ${SDL_LIBRARIES}
     ${SDL_LIBRARIES_EXTRA}
+    ${GFX_LINK_LIBS}
     ${PLATFORM_LINK_LIBS}
     ${IMGUI_LIBRARIES} )
 

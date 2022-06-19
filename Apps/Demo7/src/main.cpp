@@ -12,6 +12,7 @@
 #include <array>
 #include <vector>
 #include <algorithm> // for std::sort
+#include "IncludeGL.h"
 #include "DBase.h"
 #include "MathBase.h"
 #include "RendBase.h"
@@ -396,9 +397,14 @@ int main( int argc, char *argv[] )
         auto *pRend = app.GetRenderer();
 
         // clear the device
+#ifdef ENABLE_OPENGL
+        glViewport(0, 0, app.GetDispSize()[0], app.GetDispSize()[1]);
+        glClearColor( 0, 0, 0, 0 );
+        glClear( GL_COLOR_BUFFER_BIT );
+#else
         SDL_SetRenderDrawColor( pRend, 0, 0, 0, 0 );
         SDL_RenderClear( pRend );
-
+#endif
         // animate
         if ( _sPar.DISP_ANIM_YAW )
         {

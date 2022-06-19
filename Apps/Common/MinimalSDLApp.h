@@ -9,6 +9,7 @@
 #ifndef MINIMALSDLAPP_H
 #define MINIMALSDLAPP_H
 
+#include <array>
 #include <string>
 #include <functional>
 #include "SDL.h"
@@ -19,6 +20,7 @@ class MinimalSDLApp
     SDL_Window      *mpWindow   {};
     SDL_Surface     *mpSurface  {};
     SDL_Renderer    *mpRenderer {};
+    SDL_GLContext   mpSDLGLContext {};
 
     size_t          mFrameCnt       {};
     double          mLastFrameTimeS {};
@@ -39,6 +41,8 @@ public:
 
     bool BeginFrame();
     void EndFrame();
+
+    std::array<int,2> GetDispSize() const;
 
     void DrawMainUIWin( const std::function<void ()> &fn );
 

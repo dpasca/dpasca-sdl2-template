@@ -9,6 +9,7 @@
 #include <string>
 #include <chrono>
 #include <filesystem>
+#include "IncludeGL.h"
 #ifdef ENABLE_IMGUI
 # define IMGUI_DEFINE_MATH_OPERATORS
 # include "imgui.h"
@@ -121,21 +122,58 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h )
         SDL_LogError( SDL_LOG_CATEGORY_APPLICATION, "%s: %s\n", pMsg, SDL_GetError() );
         exit( 1 );
     };
+    auto exitErr = [&]( const char *pMsg )
+    {
+        SDL_LogError( SDL_LOG_CATEGORY_ERROR, "%s\n", pMsg );
+        exit( 1 );
+    };
 
     // initialize SDL
     if ( SDL_Init(SDL_INIT_VIDEO) )
         exitErrSDL( "SDL_Init failed" );
 
+#ifdef ENABLE_OPENGL
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+#  ifdef IS_GLES
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+#  else
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+#  endif
+# ifdef USE_WEBGL1
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+# else
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+# endif
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+
+    //SDL_GL_SetAttribute( SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1 );
+#endif
+
     // create the window
+    const auto winFlags = (SDL_WindowFlags)(
+#ifdef ENABLE_OPENGL
+                            SDL_WINDOW_OPENGL |
+#endif
+                            //SDL_WINDOW_RESIZABLE |
+                            //SDL_WINDOW_ALLOW_HIGHDPI |
+                            SDL_WINDOW_SHOWN);
+
     mpWindow = SDL_CreateWindow(
                         title.c_str(),
                         SDL_WINDOWPOS_UNDEFINED,
                         SDL_WINDOWPOS_UNDEFINED,
-                        w, h, 0);
+                        w, h, winFlags );
     if ( !mpWindow )
         exitErrSDL( "Window creation fail" );
 
 #ifdef ENABLE_OPENGL
+    mpSDLGLContext = SDL_GL_CreateContext( mpWindow );
+
+    if ( GLEW_OK != glewInit() )
+        exitErr( "Failed to initialize GLEW" );
+
+    SDL_GL_MakeCurrent( mpWindow, mpSDLGLContext );
+
     glGetIntegerv( GL_MAJOR_VERSION, &mUsingGLVersion_Major );
     glGetIntegerv( GL_MINOR_VERSION, &mUsingGLVersion_Minor );
 #endif
@@ -165,8 +203,7 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h )
     ImGui::StyleColorsDark();
 
 # ifdef ENABLE_OPENGL
-#  error Not yet supported
-    ImGui_ImplSDL2_InitForOpenGL( mpWindow, mpGLContext );
+    ImGui_ImplSDL2_InitForOpenGL( mpWindow, mpSDLGLContext );
     if ( mUsingGLVersion_Major >= 3 )
     {
         const char *pGLSLVer = mUsingGLVersion_Major > 3 || mUsingGLVersion_Minor >= 2
@@ -246,6 +283,8 @@ void MinimalSDLApp::EndFrame()
 #ifdef ENABLE_IMGUI
     ImGui::Render();
 # ifdef ENABLE_OPENGL
+    glViewport( 0, 0, GetDispSize()[0], GetDispSize()[1] );
+
     if ( mUsingGLVersion_Major >= 3 )
         ImGui_ImplOpenGL3_RenderDrawData( ImGui::GetDrawData() );
     else
@@ -274,9 +313,24 @@ void MinimalSDLApp::EndFrame()
     if ( mUseSWRender )
         SDL_UpdateWindowSurface( mpWindow );
     else
+#ifdef ENABLE_OPENGL
+        SDL_GL_SwapWindow( mpWindow );
+#else
         SDL_RenderPresent( mpRenderer );
+#endif
 
     mFrameCnt += 1;
+}
+
+//==================================================================
+std::array<int,2> MinimalSDLApp::GetDispSize() const
+{
+    int w {};
+    int h {};
+    if ( SDL_GetRendererOutputSize( mpRenderer, &w, &h ) )
+        return {0,0};
+
+    return {w, h};
 }
 
 //==================================================================

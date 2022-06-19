@@ -17,6 +17,7 @@ add_executable( ${PROJECT_NAME} ${SRCS} ${INCS} ${SRCS_COM} ${INCS_COM} )
 target_link_libraries( ${PROJECT_NAME}
     ${SDL_LIBRARIES}
     ${SDL_LIBRARIES_EXTRA}
+    ${GFX_LINK_LIBS}
     ${PLATFORM_LINK_LIBS}
     ${IMGUI_LIBRARIES} )
 

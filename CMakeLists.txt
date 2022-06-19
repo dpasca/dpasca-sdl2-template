@@ -102,6 +102,8 @@ endif()
 #==================================================================
 # externals: OpenGL
 if (ENABLE_OPENGL)
+    add_definitions( -DENABLE_OPENGL )
+
     cmake_policy(SET CMP0072 NEW)
     find_package(OpenGL)
 
