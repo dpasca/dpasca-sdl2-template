@@ -149,11 +149,12 @@ inline void drawAtom( auto *pRend, const VertDev &vdev )
     c_auto x = (float)(vdev.pos[0] - w*0.5f);
     c_auto y = (float)(vdev.pos[1] - h*0.5f);
 #ifdef USE_OGL
-    pRend->DrawRectFill( x, y, w, h, IColor4({
-                                        vdev.col[0] * (1.f/255),
-                                        vdev.col[1] * (1.f/255),
-                                        vdev.col[2] * (1.f/255),
-                                        vdev.col[3] * (1.f/255) }) );
+    pRend->DrawRectFill( x, y, vdev.pos[2], w, h,
+            IColor4({
+                vdev.col[0] * (1.f/255),
+                vdev.col[1] * (1.f/255),
+                vdev.col[2] * (1.f/255),
+                vdev.col[3] * (1.f/255) }) );
 #else
     c_auto c = vdev.col;
     SDL_SetRenderDrawColor( pRend, c[0], c[1], c[2], c[3] );
@@ -215,12 +216,13 @@ static void drawTerrain(
         }
     }
 
+#ifndef USE_OGL
     // sort with bigger Z first
     std::sort( vertsDev.begin(), vertsDev.end(), []( c_auto &l, c_auto &r )
     {
         return l.pos[2] > r.pos[2];
     });
-
+#endif
     // finally render the verts
     for (c_auto &v : vertsDev)
         drawAtom( pRend, v );
@@ -428,7 +430,9 @@ int main( int argc, char *argv[] )
 #ifdef USE_OGL
         glViewport(0, 0, app.GetDispSize()[0], app.GetDispSize()[1]);
         glClearColor( 0, 0, 0, 0 );
-        glClear( GL_COLOR_BUFFER_BIT );
+        glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+
+        glEnable( GL_DEPTH_TEST );
 
         auto *pRend = &immgl;
         pRend->ResetStates();

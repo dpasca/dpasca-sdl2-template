@@ -98,15 +98,22 @@ public:
     void DrawLine( const IFloat2 &p1, const IFloat2 &p2, const IColor4 &col );
     void DrawLine( const IFloat2 &p1, const IFloat2 &p2, const IColor4 &col1, const IColor4 &col2 );
 
-    void DrawRectFill( const IFloat2 &pos, const IFloat2 &siz, const std::array<IColor4,4> &cols );
-    void DrawRectFill( const IFloat2 &pos, const IFloat2 &siz, const IColor4 &col );
+    template <typename PT>
+    void DrawRectFill( const PT &pos, const IFloat2 &siz, const std::array<IColor4,4> &cols );
+    template <typename PT>
+    void DrawRectFill( const PT &pos, const IFloat2 &siz, const IColor4 &col );
+
     void DrawRectFill( float x, float y, float w, float h, const IColor4 &col )
     {
-        DrawRectFill( {x,y}, {w,h}, col );
+        DrawRectFill( IFloat2{x,y}, {w,h}, col );
+    }
+    void DrawRectFill( float x, float y, float z, float w, float h, const IColor4 &col )
+    {
+        DrawRectFill( IFloat3{x,y,z}, {w,h}, col );
     }
     void DrawRectFill( const IFloat4 &rc, const IColor4 &col )
     {
-        DrawRectFill( {rc[0],rc[1]}, {rc[2],rc[3]}, col );
+        DrawRectFill( IFloat2{rc[0],rc[1]}, IFloat2{rc[2],rc[3]}, col );
     }
 
 private:
@@ -130,13 +137,17 @@ private:
 
     std::array<IFloat3,4> makeRectVtxPos( const IFloat2 &pos, const IFloat2 &siz ) const
     {
-        return
-        {
-            pos[0]+siz[0]*0, pos[1]+siz[1]*0, 0,
-            pos[0]+siz[0]*1, pos[1]+siz[1]*0, 0,
-            pos[0]+siz[0]*0, pos[1]+siz[1]*1, 0,
-            pos[0]+siz[0]*1, pos[1]+siz[1]*1, 0
-        };
+        return { pos[0]+siz[0]*0, pos[1]+siz[1]*0, 0,
+                 pos[0]+siz[0]*1, pos[1]+siz[1]*0, 0,
+                 pos[0]+siz[0]*0, pos[1]+siz[1]*1, 0,
+                 pos[0]+siz[0]*1, pos[1]+siz[1]*1, 0 };
+    }
+    std::array<IFloat3,4> makeRectVtxPos( const IFloat3 &pos, const IFloat2 &siz ) const
+    {
+        return { pos[0]+siz[0]*0, pos[1]+siz[1]*0, pos[2],
+                 pos[0]+siz[0]*1, pos[1]+siz[1]*0, pos[2],
+                 pos[0]+siz[0]*0, pos[1]+siz[1]*1, pos[2],
+                 pos[0]+siz[0]*1, pos[1]+siz[1]*1, pos[2] };
     }
 
     void switchModeFlags( IUInt flags );
@@ -212,8 +223,9 @@ inline void ImmGL::DrawLine(
 }
 
 //==================================================================
+template <typename PT>
 inline void ImmGL::DrawRectFill(
-            const IFloat2 &pos,
+            const PT &pos,
             const IFloat2 &siz,
             const std::array<IColor4,4> &cols )
 {
@@ -226,8 +238,9 @@ inline void ImmGL::DrawRectFill(
 }
 
 //==================================================================
+template <typename PT>
 inline void ImmGL::DrawRectFill(
-            const IFloat2 &pos,
+            const PT &pos,
             const IFloat2 &siz,
             const IColor4 &col )
 {
