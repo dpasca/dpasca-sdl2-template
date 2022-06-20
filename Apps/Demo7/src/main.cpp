@@ -74,60 +74,67 @@ inline Float3 calcLightDir( const Float2 &the_phi_deg )
 }
 
 //==================================================================
-inline void drawAtom( auto &immgl,
-                      const Float3    &pos,
-                      const float     &siz,
-                      const RBColType &col )
+static std::vector<Float3> makeTerrVerts( auto &terr, float sca )
 {
-    immgl.DrawRectFill(
-            (float)(pos[0] - siz*0.5f),
-            (float)(pos[1] - siz*0.5f),
-            pos[2],
-            siz,
-            siz,
-            IColor4({
-                col[0] * (1.f/255),
-                col[1] * (1.f/255),
-                col[2] * (1.f/255),
-                col[3] * (1.f/255) }) );
+    c_auto siz = terr.GetSiz();
+
+    std::vector<Float3> verts( siz * siz );
+
+    c_auto oosiz = 1.f / siz;
+    size_t idx = 0;
+    for (size_t yi=0; yi < siz; ++yi)
+    {
+        c_auto y = glm::mix( -0.5f, 0.5f, yi * oosiz );
+        for (size_t xi=0; xi < siz; ++xi, ++idx)
+        {
+            c_auto x = glm::mix( -0.5f, 0.5f, xi * oosiz );
+            verts[ idx ] = { sca * Float3( x, terr.mHeights[ idx ], y ) };
+        }
+    }
+
+    return verts;
 }
 
 //==================================================================
 static void drawTerrain(
-        auto &terr,
-        float dispSca,
+        const auto &terr,
+        const auto &terrVerts,
         const uint32_t cropWH[2],
         auto &immgl,
         const Matrix44 &proj_obj )
 {
     c_auto siz = terr.GetSiz();
 
-    c_auto dxdt = dispSca / (float)siz;
-
     c_auto cropRC = TERR_MakeCropRC( terr.GetSiz(), cropWH );
     c_auto xi1 = cropRC[0];
     c_auto yi1 = cropRC[1];
-    c_auto xi2 = cropRC[2];
-    c_auto yi2 = cropRC[3];
+    c_auto xi2 = cropRC[2] - 1;
+    c_auto yi2 = cropRC[3] - 1;
 
     immgl.SetMtxPS( proj_obj );
 
     c_auto oosiz = 1.f / siz;
     for (size_t yi=yi1; yi < yi2; ++yi)
     {
-        c_auto y = glm::mix( -0.5f, 0.5f, yi * oosiz );
-
-        c_auto rowCellIdx = yi << terr.GetSizL2();
+        c_auto row0 = (yi+0) << terr.GetSizL2();
+        c_auto row1 = (yi+1) << terr.GetSizL2();
         for (size_t xi=xi1; xi < xi2; ++xi)
         {
-            c_auto x = glm::mix( -0.5f, 0.5f, xi * oosiz );
+            c_auto i00 = row0 + xi+0;
+            c_auto i01 = row0 + xi+1;
+            c_auto i10 = row1 + xi+0;
+            c_auto i11 = row1 + xi+1;
 
-            c_auto cellIdx = xi + rowCellIdx;
+            c_auto &col = terr.mBakedCols[ i00 ];
 
-            drawAtom( immgl,
-                dispSca * Float3( x, terr.mHeights[ cellIdx ], y ),
-                dxdt * 1.5f,
-                terr.mBakedCols[ cellIdx ] );
+            immgl.DrawQuad({
+                terrVerts[ i00 ], terrVerts[ i01 ],
+                terrVerts[ i10 ], terrVerts[ i11 ]},
+                IColor4(
+                    (float)col[0],
+                    (float)col[1],
+                    (float)col[2],
+                    (float)col[3] ) * (1.f/255) );
         }
     }
 }
@@ -135,7 +142,7 @@ static void drawTerrain(
 //==================================================================
 //=== Generation
 //==================================================================
-static void makeTerrFromParams( auto &terr )
+static void makeTerrFromParams( auto &terr, auto &terrVerts )
 {
     // allocate a new map
     terr = Terrain( _sPar.GEN_SIZL2 );
@@ -176,11 +183,14 @@ static void makeTerrFromParams( auto &terr )
         TGEN_CalcShadows( terr, calcLightDir( _sPar.LIGHT_DIR_LAT_LONG ) );
 
     TGEN_CalcBakedColors( terr, _sPar.LIGHT_DIFF_COL, _sPar.LIGHT_AMB_COL );
+
+    //
+    terrVerts = makeTerrVerts( terr, DISP_TERR_SCALE );
 }
 
 #ifdef ENABLE_IMGUI
 //==================================================================
-static void handleUI( size_t frameCnt, Terrain &terr )
+static void handleUI( size_t frameCnt, Terrain &terr, auto &terrVerts )
 {
     //ImGui::Text( "Frame: %zu", frameCnt );
 
@@ -255,7 +265,7 @@ static void handleUI( size_t frameCnt, Terrain &terr )
         _sPar.GEN_STASIZL2 = std::min( _sPar.GEN_STASIZL2, _sPar.GEN_SIZL2 );
         _sPar.GEN_ROUGH    = std::clamp( _sPar.GEN_ROUGH, 0.f, 1.f );
 
-        makeTerrFromParams( terr );
+        makeTerrFromParams( terr, terrVerts );
     }
 
     if ( header( "Export", false ) )
@@ -276,30 +286,14 @@ static void handleUI( size_t frameCnt, Terrain &terr )
 #endif
 
 //==================================================================
-inline void debugDraw(
-                auto &immgl,
-                const Matrix44 &proj_obj )
+inline void debugDraw( auto &immgl, const Matrix44 &proj_obj )
 {
-#if 0
-    auto draw3DLine = [&]( const Float3 &pos1, const Float3 &pos2 )
-    {
-        // convert from object-space to device-space (2D display dimensions)
-        c_auto v1 = makeScreenVert( proj_obj, VertObj{pos1} );
-        c_auto v2 = makeScreenVert( proj_obj, VertObj{pos2} );
+    immgl.SetMtxPS( proj_obj );
 
-        c_auto v1p = v1.pos;
-        c_auto v2p = v2.pos;
-
-        if ( v1p[2] > 0 && v2p[2] > 0 )
-            SDL_RenderDrawLineF( pRend, v1p[0], v1p[1], v2p[0], v2p[1] );
-    };
-
-    SDL_SetRenderDrawColor( pRend, 0, 255, 0, 90 );
-
-    draw3DLine(
-            Float3(0,0,0),
-            calcLightDir( _sPar.LIGHT_DIR_LAT_LONG ) * DISP_TERR_SCALE * 0.5f );
-#endif
+    immgl.DrawLine(
+            {0,0,0},
+            calcLightDir( _sPar.LIGHT_DIR_LAT_LONG ) * DISP_TERR_SCALE * 0.5f,
+            {0.f,1.f,0.f,0.3f} );
 }
 
 //==================================================================
@@ -313,7 +307,8 @@ int main( int argc, char *argv[] )
     ImmGL immgl;
 
     Terrain terr;
-    makeTerrFromParams( terr );
+    std::vector<Float3> terrVerts;
+    makeTerrFromParams( terr, terrVerts );
 
     // begin the main/rendering loop
     for (size_t frameCnt=0; ; ++frameCnt)
@@ -323,7 +318,7 @@ int main( int argc, char *argv[] )
             break;
 
 #ifdef ENABLE_IMGUI
-        app.DrawMainUIWin( [&]() { handleUI( frameCnt, terr ); } );
+        app.DrawMainUIWin( [&]() { handleUI( frameCnt, terr, terrVerts ); } );
 #endif
         glViewport(0, 0, app.GetDispSize()[0], app.GetDispSize()[1]);
         glClearColor( 0, 0, 0, 0 );
@@ -366,12 +361,7 @@ int main( int argc, char *argv[] )
         c_auto proj_obj = proj_camera * cam_world * world_obj;
 
         // draw the terrain
-        drawTerrain(
-                terr,
-                DISP_TERR_SCALE,
-                _sPar.DISP_CROP_WH,
-                immgl,
-                proj_obj );
+        drawTerrain( terr, terrVerts, _sPar.DISP_CROP_WH, immgl, proj_obj );
 
         //
         if ( _sForceDebugRendCnt )

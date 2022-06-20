@@ -105,8 +105,11 @@ public:
 
     void SetMtxPS( const IMat4 &m );
 
-    void DrawLine( const IFloat2 &p1, const IFloat2 &p2, const IColor4 &col );
-    void DrawLine( const IFloat2 &p1, const IFloat2 &p2, const IColor4 &col1, const IColor4 &col2 );
+    void DrawLine( const IFloat3 &p1, const IFloat3 &p2, const IColor4 &col );
+    void DrawLine( const IFloat3 &p1, const IFloat3 &p2, const IColor4 &col1, const IColor4 &col2 );
+
+    void DrawQuad( const std::array<IFloat3,4> &poss, const std::array<IColor4,4> &cols );
+    void DrawQuad( const std::array<IFloat3,4> &poss, const IColor4 &col );
 
     template <typename PT>
     void DrawRectFill( const PT &pos, const IFloat2 &siz, const std::array<IColor4,4> &cols );
@@ -200,8 +203,8 @@ private:
 
 //==================================================================
 inline void ImmGL::DrawLine(
-        const IFloat2 &p1,
-        const IFloat2 &p2,
+        const IFloat3 &p1,
+        const IFloat3 &p2,
         const IColor4 &col )
 {
     switchModeFlags( FLG_LINES );
@@ -217,8 +220,8 @@ inline void ImmGL::DrawLine(
 
 //==================================================================
 inline void ImmGL::DrawLine(
-        const IFloat2 &p1,
-        const IFloat2 &p2,
+        const IFloat3 &p1,
+        const IFloat3 &p2,
         const IColor4 &col1,
         const IColor4 &col2 )
 {
@@ -233,18 +236,35 @@ inline void ImmGL::DrawLine(
 }
 
 //==================================================================
+inline void ImmGL::DrawQuad(
+            const std::array<IFloat3,4> &poss,
+            const std::array<IColor4,4> &cols )
+{
+    switchModeFlags( 0 );
+    auto *pVtx = growVec( mVtxPC, 6 );
+    setQuadStripAsTrigsP( pVtx, poss[0], poss[1], poss[2], poss[3] );
+    setQuadStripAsTrigsC( pVtx, cols[0], cols[1], cols[2], cols[3] );
+}
+
+//==================================================================
+inline void ImmGL::DrawQuad(
+            const std::array<IFloat3,4> &poss,
+            const IColor4 &col )
+{
+    switchModeFlags( 0 );
+    auto *pVtx = growVec( mVtxPC, 6 );
+    setQuadStripAsTrigsP( pVtx, poss[0], poss[1], poss[2], poss[3] );
+    setQuadStripAsTrigsC( pVtx, col, col, col, col );
+}
+
+//==================================================================
 template <typename PT>
 inline void ImmGL::DrawRectFill(
             const PT &pos,
             const IFloat2 &siz,
             const std::array<IColor4,4> &cols )
 {
-    switchModeFlags( 0 );
-
-    auto *pVtx = growVec( mVtxPC, 6 );
-    const auto vps = makeRectVtxPos( pos, siz );
-    setQuadStripAsTrigsP( pVtx, vps[0], vps[1], vps[2], vps[3] );
-    setQuadStripAsTrigsC( pVtx, cols[0], cols[1], cols[2], cols[3] );
+    DrawQuad( makeRectVtxPos( pos, siz ), cols );
 }
 
 //==================================================================
@@ -254,12 +274,7 @@ inline void ImmGL::DrawRectFill(
             const IFloat2 &siz,
             const IColor4 &col )
 {
-    switchModeFlags( 0 );
-
-    auto *pVtx = growVec( mVtxPC, 6 );
-    const auto vps = makeRectVtxPos( pos, siz );
-    setQuadStripAsTrigsP( pVtx, vps[0], vps[1], vps[2], vps[3] );
-    setQuadStripAsTrigsC( pVtx, col, col, col, col );
+    DrawQuad( makeRectVtxPos( pos, siz ), col );
 }
 
 #endif
