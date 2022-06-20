@@ -28,8 +28,6 @@ using IStr  = std::string;
 class GShaderProg
 {
 public:
-    IUInt   mShaderVertex   {};
-    IUInt   mShaderFragment {};
     IUInt   mShaderProgram  {};
 
     IUInt   mTexLoc {};

@@ -144,73 +144,66 @@ static void check_shader_compilation( GLuint oid, bool isLink )
 //==================================================================
 GShaderProg::GShaderProg( bool useTex )
 {
-static const IStr vtxSrouce[2] = {
+// --- VERTEX ---
+static const IStr vtxSrouce =
 R"RAW(
 layout (location = 0) in vec3 a_pos;
 layout (location = 1) in vec4 a_col;
 
 out vec4 v_col;
 
-void main()
-{
-   v_col = a_col;
-
-   gl_Position = vec4( a_pos, 1.0 );
-}
-)RAW",
-R"RAW(
-layout (location = 0) in vec3 a_pos;
-layout (location = 1) in vec4 a_col;
+#ifdef USE_TEX
 layout (location = 2) in vec2 a_tc0;
-
-out vec4 v_col;
 out vec2 v_tc0;
+#endif
 
 void main()
 {
    v_col = a_col;
+#ifdef USE_TEX
    v_tc0 = a_tc0;
-
+#endif
    gl_Position = vec4( a_pos, 1.0 );
 }
-)RAW"};
-
-static const IStr frgSource[2] = {
+)RAW";
+// --- FRAGMENT ---
+static const IStr frgSource =
 R"RAW(
 in vec4 v_col;
 
-out vec4 o_col;
-
-void main()
-{
-   o_col = v_col;
-}
-)RAW",
-R"RAW(
+#ifdef USE_TEX
 uniform sampler2D s_tex;
-
-in vec4 v_col;
 in vec2 v_tc0;
+#endif
 
 out vec4 o_col;
 
 void main()
 {
-   o_col = v_col * texture( s_tex, v_tc0 );
+   o_col = v_col
+#ifdef USE_TEX
+            * texture( s_tex, v_tc0 )
+#endif
+            ;
 }
-)RAW"};
+)RAW";
 
     c_auto srcIdx = useTex ? 1 : 0;
 
-    auto makeShader = []( c_auto type, const IStr &src )
+    IStr header = "#version 330\n";
+    if ( useTex )
+        header += "#define USE_TEX\n";
+
+    auto makeShader = [&]( c_auto type, const IStr &src )
     {
         c_auto obj = glCreateShader( type );
 
-        c_auto fullStr = "#version 330\n" + src;
+        c_auto fullStr = header + src;
 
         const GLchar *ppsrcs[2] = { fullStr.c_str(), 0 };
 
-        glShaderSource( obj, 1, &ppsrcs[0], nullptr ); CHECKGLERR;
+        glShaderSource( obj, 1, &ppsrcs[0], nullptr );
+        CHECKGLERR;
 
         glCompileShader( obj );
         CHECKGLERR;
@@ -219,20 +212,22 @@ void main()
         return obj;
     };
 
-    mShaderVertex   = makeShader( GL_VERTEX_SHADER  , vtxSrouce[srcIdx] );
-    mShaderFragment = makeShader( GL_FRAGMENT_SHADER, frgSource[srcIdx] );
+    c_auto shaderVtx = makeShader( GL_VERTEX_SHADER  , vtxSrouce );
+    c_auto shaderFrg = makeShader( GL_FRAGMENT_SHADER, frgSource );
 
     mShaderProgram = glCreateProgram();
 
-    glAttachShader( mShaderProgram, mShaderVertex );
-    glAttachShader( mShaderProgram, mShaderFragment );
+    glAttachShader( mShaderProgram, shaderVtx );
+    glAttachShader( mShaderProgram, shaderFrg );
     glLinkProgram( mShaderProgram );
 
     check_shader_compilation( mShaderProgram, true );
 
-    // Always detach shaders after a successful link.
-    glDetachShader( mShaderProgram, mShaderVertex );
-    glDetachShader( mShaderProgram, mShaderFragment );
+    // always detach and delete shaders after a successful link
+    glDetachShader( mShaderProgram, shaderVtx );
+    glDetachShader( mShaderProgram, shaderFrg );
+    glDeleteShader( shaderVtx );
+    glDeleteShader( shaderFrg );
 
     //
     if ( useTex )
@@ -251,12 +246,6 @@ GShaderProg::~GShaderProg()
 {
     if ( mShaderProgram )
         glDeleteProgram( mShaderProgram );
-
-    if ( mShaderVertex )
-        glDeleteShader( mShaderVertex );
-
-    if ( mShaderVertex )
-        glDeleteShader( mShaderFragment );
 }
 
 //==================================================================
