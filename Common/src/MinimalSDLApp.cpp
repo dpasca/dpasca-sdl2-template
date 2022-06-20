@@ -196,8 +196,9 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
     else
     {
         // create the renderer
-        mpRenderer = SDL_CreateRenderer( mpWindow, -1, SDL_RENDERER_ACCELERATED |
-                                                       SDL_RENDERER_PRESENTVSYNC );
+        mpRenderer = SDL_CreateRenderer( mpWindow, -1, 0
+                        | SDL_RENDERER_ACCELERATED
+                        | (mExitFrameN ? 0 : SDL_RENDERER_PRESENTVSYNC) );
     }
 
     if ( !mpRenderer )
