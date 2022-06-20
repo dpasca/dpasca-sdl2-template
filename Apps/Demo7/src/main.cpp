@@ -74,69 +74,22 @@ inline Float3 calcLightDir( const Float2 &the_phi_deg )
 }
 
 //==================================================================
-//=== Rendering
-//==================================================================
-// vertex coming from the object
-struct VertObj
+inline void drawAtom( auto &immgl,
+                      const Float3    &pos,
+                      const float     &siz,
+                      const RBColType &col )
 {
-    Float3      pos;
-    float       siz;
-    RBColType   col;
-};
-// vertex output in screen space
-struct VertDev
-{
-    Float3      pos {};
-    Float2      siz {};
-    RBColType   col {};
-};
-
-//==================================================================
-inline VertDev makeScreenVert( const Matrix44 &xform, const VertObj &vobj )
-{
-    VertDev vdev;
-
-    // homogeneus coordinates (-w..w)
-    c_auto posH = xform * glm::vec4( vobj.pos, 1.f );
-
-    if ( posH[2] <= 0 ) // skip if it's behind the camera
-        return vdev;
-
-    // convert to screen-space, meaning that anything visible is
-    // in the range -1..1 for x,y and 0..1 for z
-    c_auto oow = 1.f / posH.w;
-
-    vdev.pos[0] = posH[0] * oow;
-    vdev.pos[1] = posH[1] * oow;
-    vdev.pos[2] = posH[2] * oow;
-
-    vdev.siz[0] = vobj.siz * oow;
-    vdev.siz[1] = vobj.siz * oow;
-    vdev.col = vobj.col;
-
-    return vdev;
-}
-
-//
-inline bool isValidDeviceVert( const Float3 &vert )
-{
-    return vert[2] != 0.f;
-}
-
-//==================================================================
-inline void drawAtom( auto &immgl, const VertDev &vdev )
-{
-    c_auto w = vdev.siz[0];
-    c_auto h = vdev.siz[1];
-    c_auto x = (float)(vdev.pos[0] - w*0.5f);
-    c_auto y = (float)(vdev.pos[1] - h*0.5f);
-
-    immgl.DrawRectFill( x, y, vdev.pos[2], w, h,
+    immgl.DrawRectFill(
+            (float)(pos[0] - siz*0.5f),
+            (float)(pos[1] - siz*0.5f),
+            pos[2],
+            siz,
+            siz,
             IColor4({
-                vdev.col[0] * (1.f/255),
-                vdev.col[1] * (1.f/255),
-                vdev.col[2] * (1.f/255),
-                vdev.col[3] * (1.f/255) }) );
+                col[0] * (1.f/255),
+                col[1] * (1.f/255),
+                col[2] * (1.f/255),
+                col[3] * (1.f/255) }) );
 }
 
 //==================================================================
@@ -157,7 +110,7 @@ static void drawTerrain(
     c_auto xi2 = cropRC[2];
     c_auto yi2 = cropRC[3];
 
-    immgl.SetMtxPS( Matrix44(1.f) );
+    immgl.SetMtxPS( proj_obj );
 
     c_auto oosiz = 1.f / siz;
     for (size_t yi=yi1; yi < yi2; ++yi)
@@ -171,17 +124,10 @@ static void drawTerrain(
 
             c_auto cellIdx = xi + rowCellIdx;
 
-            VertObj vobj;
-            vobj.pos = dispSca * Float3( x, terr.mHeights[ cellIdx ], y );
-            vobj.siz = dxdt * 1.5f;
-            vobj.col = terr.mBakedCols[ cellIdx ];
-
-            // convert from object-space to device-space (2D display dimensions)
-            c_auto vout = makeScreenVert( proj_obj, vobj );
-
-            // store the vertex
-            if ( vout.pos[2] > 0 )
-                drawAtom( immgl, vout );
+            drawAtom( immgl,
+                dispSca * Float3( x, terr.mHeights[ cellIdx ], y ),
+                dxdt * 1.5f,
+                terr.mBakedCols[ cellIdx ] );
         }
     }
 }
