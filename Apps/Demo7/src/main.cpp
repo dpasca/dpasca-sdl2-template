@@ -157,6 +157,8 @@ static void drawTerrain(
     c_auto xi2 = cropRC[2];
     c_auto yi2 = cropRC[3];
 
+    immgl.SetMtxPS( Matrix44(1.f) );
+
     c_auto oosiz = 1.f / siz;
     for (size_t yi=yi1; yi < yi2; ++yi)
     {

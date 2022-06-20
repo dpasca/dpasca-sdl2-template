@@ -100,6 +100,9 @@ if (EMSCRIPTEN)
 endif()
 
 #==================================================================
+# externals: glm
+include_directories( _externals/glm )
+
 # externals: OpenGL
 if (ENABLE_OPENGL)
     add_definitions( -DENABLE_OPENGL )
@@ -204,6 +207,8 @@ function(add_subdirectory_if_exists DIR)
 endfunction()
 
 # apps
+include_directories( Common/src )
+add_subdirectory_if_exists( Common )
 add_subdirectory_if_exists( Apps/Demo1 )
 add_subdirectory_if_exists( Apps/Demo2 )
 add_subdirectory_if_exists( Apps/Demo3 )

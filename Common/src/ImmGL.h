@@ -13,29 +13,40 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <unordered_map>
+#include "MathBase.h"
 
 template <typename T> using IVec = std::vector<T>;
 
-using IFloat2 = std::array<float,2>;
-using IFloat3 = std::array<float,3>;
-using IFloat4 = std::array<float,4>;
-using IColor4 = std::array<float,4>;
+using IFloat2 = glm::vec2;
+using IFloat3 = glm::vec3;
+using IFloat4 = glm::vec4;
+using IMat4   = glm::mat4;
+using IColor4 = glm::vec4;
 
 using IUInt = unsigned int;
 using IStr  = std::string;
 
 //==================================================================
-class GShaderProg
+class ShaderProg
 {
 public:
-    IUInt   mShaderProgram  {};
+    IUInt   mProgramID  {};
 
-    IUInt   mTexLoc {};
+    std::unordered_map<IStr,IUInt>  mLocs;
 
-    GShaderProg( bool useTex );
-    ~GShaderProg();
+    ShaderProg( bool useTex );
+    ~ShaderProg();
 
-    const auto GetProgramID() const { return mShaderProgram; }
+    const auto GetProgramID() const { return mProgramID; }
+
+    void SetUniform( const char *pName, float v );
+    void SetUniform( const char *pName, int v );
+    void SetUniform( const char *pName, const IMat4 &m );
+    void SetUniform( const char *pName, const IFloat3 &v );
+    void SetUniform( const char *pName, const IFloat4 &v );
+private:
+    IUInt getLoc( const char *pName );
 };
 
 //==================================================================
@@ -70,11 +81,10 @@ class ImmGL
     };
     IUInt           mModeFlags = 0;
     IUInt           mCurTexID = 0;
+    ShaderProg      *mpCurShaProg   {};
+    IMat4           mCurMtxPS {1.f};
 
-    bool            mUseShaders {};
-
-    IVec<std::unique_ptr<GShaderProg>>   moShaProgs;
-    IUInt           mCurShaderProgram {};
+    IVec<std::unique_ptr<ShaderProg>>   moShaProgs;
 
     IUInt           mVAO = 0;
     IUInt           mVBO = 0;
@@ -92,6 +102,8 @@ public:
 
     void SetTexture( IUInt texID );
     void SetNoTexture() { SetTexture( 0 ); }
+
+    void SetMtxPS( const IMat4 &m );
 
     void DrawLine( const IFloat2 &p1, const IFloat2 &p2, const IColor4 &col );
     void DrawLine( const IFloat2 &p1, const IFloat2 &p2, const IColor4 &col1, const IColor4 &col2 );
@@ -135,17 +147,17 @@ private:
 
     std::array<IFloat3,4> makeRectVtxPos( const IFloat2 &pos, const IFloat2 &siz ) const
     {
-        return { pos[0]+siz[0]*0, pos[1]+siz[1]*0, 0,
-                 pos[0]+siz[0]*1, pos[1]+siz[1]*0, 0,
-                 pos[0]+siz[0]*0, pos[1]+siz[1]*1, 0,
-                 pos[0]+siz[0]*1, pos[1]+siz[1]*1, 0 };
+        return { IFloat3{pos[0]+siz[0]*0, pos[1]+siz[1]*0, 0},
+                 IFloat3{pos[0]+siz[0]*1, pos[1]+siz[1]*0, 0},
+                 IFloat3{pos[0]+siz[0]*0, pos[1]+siz[1]*1, 0},
+                 IFloat3{pos[0]+siz[0]*1, pos[1]+siz[1]*1, 0} };
     }
     std::array<IFloat3,4> makeRectVtxPos( const IFloat3 &pos, const IFloat2 &siz ) const
     {
-        return { pos[0]+siz[0]*0, pos[1]+siz[1]*0, pos[2],
-                 pos[0]+siz[0]*1, pos[1]+siz[1]*0, pos[2],
-                 pos[0]+siz[0]*0, pos[1]+siz[1]*1, pos[2],
-                 pos[0]+siz[0]*1, pos[1]+siz[1]*1, pos[2] };
+        return { IFloat3{pos[0]+siz[0]*0, pos[1]+siz[1]*0, pos[2]},
+                 IFloat3{pos[0]+siz[0]*1, pos[1]+siz[1]*0, pos[2]},
+                 IFloat3{pos[0]+siz[0]*0, pos[1]+siz[1]*1, pos[2]},
+                 IFloat3{pos[0]+siz[0]*1, pos[1]+siz[1]*1, pos[2]} };
     }
 
     void switchModeFlags( IUInt flags );

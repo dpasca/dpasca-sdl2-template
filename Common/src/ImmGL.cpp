@@ -142,42 +142,48 @@ static void check_shader_compilation( GLuint oid, bool isLink )
 }
 
 //==================================================================
-GShaderProg::GShaderProg( bool useTex )
+ShaderProg::ShaderProg( bool useTex )
 {
-// --- VERTEX ---
-static const IStr vtxSrouce =
-R"RAW(
+static const IStr vtxSrouce = R"RAW(
+// input attributes
 layout (location = 0) in vec3 a_pos;
 layout (location = 1) in vec4 a_col;
-
-out vec4 v_col;
-
 #ifdef USE_TEX
 layout (location = 2) in vec2 a_tc0;
+#endif
+
+// out varyings
+out vec4 v_col;
+#ifdef USE_TEX
 out vec2 v_tc0;
 #endif
 
+// vertx main
 void main()
 {
    v_col = a_col;
 #ifdef USE_TEX
    v_tc0 = a_tc0;
 #endif
-   gl_Position = vec4( a_pos, 1.0 );
+   gl_Position = u_mtxPS * vec4( a_pos, 1.0 );
 }
 )RAW";
-// --- FRAGMENT ---
-static const IStr frgSource =
-R"RAW(
-in vec4 v_col;
 
+//---------------
+static const IStr frgSource = R"RAW(
+// input varyings
+in vec4 v_col;
 #ifdef USE_TEX
-uniform sampler2D s_tex;
 in vec2 v_tc0;
 #endif
 
+#ifdef USE_TEX
+#endif
+
+// out color
 out vec4 o_col;
 
+// fragment main
 void main()
 {
    o_col = v_col
@@ -188,9 +194,14 @@ void main()
 }
 )RAW";
 
-    c_auto srcIdx = useTex ? 1 : 0;
+    // header
+    IStr header = R"RAW(
+#version 330
 
-    IStr header = "#version 330\n";
+uniform mat4x4  u_mtxPS;
+uniform sampler2D s_tex;
+)RAW";
+
     if ( useTex )
         header += "#define USE_TEX\n";
 
@@ -199,14 +210,10 @@ void main()
         c_auto obj = glCreateShader( type );
 
         c_auto fullStr = header + src;
-
         const GLchar *ppsrcs[2] = { fullStr.c_str(), 0 };
 
-        glShaderSource( obj, 1, &ppsrcs[0], nullptr );
-        CHECKGLERR;
-
-        glCompileShader( obj );
-        CHECKGLERR;
+        glShaderSource( obj, 1, &ppsrcs[0], nullptr ); CHECKGLERR;
+        glCompileShader( obj ); CHECKGLERR;
 
         check_shader_compilation( obj, false );
         return obj;
@@ -215,58 +222,73 @@ void main()
     c_auto shaderVtx = makeShader( GL_VERTEX_SHADER  , vtxSrouce );
     c_auto shaderFrg = makeShader( GL_FRAGMENT_SHADER, frgSource );
 
-    mShaderProgram = glCreateProgram();
+    mProgramID = glCreateProgram();
 
-    glAttachShader( mShaderProgram, shaderVtx );
-    glAttachShader( mShaderProgram, shaderFrg );
-    glLinkProgram( mShaderProgram );
+    glAttachShader( mProgramID, shaderVtx );
+    glAttachShader( mProgramID, shaderFrg );
+    glLinkProgram( mProgramID );
 
-    check_shader_compilation( mShaderProgram, true );
+    check_shader_compilation( mProgramID, true );
 
     // always detach and delete shaders after a successful link
-    glDetachShader( mShaderProgram, shaderVtx );
-    glDetachShader( mShaderProgram, shaderFrg );
+    glDetachShader( mProgramID, shaderVtx );
+    glDetachShader( mProgramID, shaderFrg );
     glDeleteShader( shaderVtx );
     glDeleteShader( shaderFrg );
-
-    //
-    if ( useTex )
-    {
-        mTexLoc = glGetUniformLocation( mShaderProgram, "s_tex" );
-        glUseProgram( mShaderProgram );
-        glUniform1i( mTexLoc, 0 );
-    }
-
-    // for consistency
-    glUseProgram( 0 );
 }
 
 //==================================================================
-GShaderProg::~GShaderProg()
+ShaderProg::~ShaderProg()
 {
-    if ( mShaderProgram )
-        glDeleteProgram( mShaderProgram );
+    if ( mProgramID )
+        glDeleteProgram( mProgramID );
+}
+
+//==================================================================
+IUInt ShaderProg::getLoc( const char *pName )
+{
+    auto it = mLocs.find( pName );
+    if ( it == mLocs.end() )
+        it = mLocs.insert({ pName, glGetUniformLocation( mProgramID, pName ) }).first;
+
+    return it->second;
+}
+
+void ShaderProg::SetUniform( const char *pName, float v )
+{
+    glUniform1f( getLoc( pName ), v );
+}
+void ShaderProg::SetUniform( const char *pName, int v )
+{
+    glUniform1i( getLoc( pName ), v );
+}
+void ShaderProg::SetUniform( const char *pName, const IMat4 &m )
+{
+    glUniformMatrix4fv( getLoc( pName ), 1, false, (const float *)&m );
+}
+void ShaderProg::SetUniform( const char *pName, const IFloat3 &v )
+{
+    glUniform3fv( getLoc( pName ), 1, (const float *)&v[0] );
+}
+void ShaderProg::SetUniform( const char *pName, const IFloat4 &v )
+{
+    glUniform4fv( getLoc( pName ), 1, (const float *)&v[0] );
 }
 
 //==================================================================
 //==================================================================
 ImmGL::ImmGL()
 {
-    mUseShaders = true;//(majorVer >= 4 && !isSWRendering);
+    FLUSHGLERR;
 
-    if ( mUseShaders )
-    {
-        FLUSHGLERR;
+    moShaProgs.push_back( std::make_unique<ShaderProg>( false ) );
+    moShaProgs.push_back( std::make_unique<ShaderProg>( true ) );
 
-        moShaProgs.push_back( std::make_unique<GShaderProg>( false ) );
-        moShaProgs.push_back( std::make_unique<GShaderProg>( true ) );
+    glGenBuffers( 1, &mVBO );
+    CHECKGLERR;
 
-        glGenBuffers( 1, &mVBO );
-        CHECKGLERR;
-
-        glGenVertexArrays( 1, &mVAO );
-        CHECKGLERR;
-    }
+    glGenVertexArrays( 1, &mVAO );
+    CHECKGLERR;
 }
 
 //==================================================================
@@ -318,6 +340,16 @@ void ImmGL::SetTexture( IUInt texID )
 }
 
 //==================================================================
+void ImmGL::SetMtxPS( const IMat4 &m )
+{
+    if ( mCurMtxPS == m )
+        return;
+
+    FlushPrims();
+    mCurMtxPS = m;
+}
+
+//==================================================================
 void ImmGL::switchModeFlags( IUInt flags )
 {
     if ( mModeFlags == flags )
@@ -347,14 +379,11 @@ void ImmGL::ResetStates()
     glBindBuffer( GL_ARRAY_BUFFER, 0 );
 
     //
-    if ( mUseShaders )
-    {
-        mCurShaderProgram = 0;
-        glUseProgram( 0 );
+    mpCurShaProg = nullptr;
+    glUseProgram( 0 );
 
-        //
-        glBindVertexArray( 0 );
-    }
+    //
+    glBindVertexArray( 0 );
 }
 
 //==================================================================
@@ -364,123 +393,84 @@ void ImmGL::FlushPrims()
     if NOT( n )
         return;
 
-    if ( mUseShaders )
+    FLUSHGLERR;
+    c_auto newVBOSize  = (mModeFlags & FLG_TEX)
+                        ? mVtxPCT.size() * sizeof(mVtxPCT[0])
+                        : mVtxPC.size()  * sizeof(mVtxPC[0]);
+
+    glBindBuffer( GL_ARRAY_BUFFER, mVBO ); CHECKGLERR;
+
+    // expand as necessary
+    if ( mLastVBOSize != newVBOSize )
     {
-        FLUSHGLERR;
-        c_auto newVBOSize  = (mModeFlags & FLG_TEX)
-                            ? mVtxPCT.size() * sizeof(mVtxPCT[0])
-                            : mVtxPC.size()  * sizeof(mVtxPC[0]);
-
-        glBindBuffer( GL_ARRAY_BUFFER, mVBO );
+        mLastVBOSize = newVBOSize;
+        glBufferData( GL_ARRAY_BUFFER, newVBOSize, 0, GL_DYNAMIC_DRAW );
         CHECKGLERR;
+    }
 
-        // expand as necessary
-        if ( mLastVBOSize != newVBOSize )
+    if ( (mModeFlags & FLG_TEX) )
+        glBufferSubData( GL_ARRAY_BUFFER, 0, newVBOSize, mVtxPCT.data() );
+    else
+        glBufferSubData( GL_ARRAY_BUFFER, 0, newVBOSize, mVtxPC.data() );
+    CHECKGLERR;
+
+    //
+    glBindVertexArray( mVAO );
+
+    glEnableVertexAttribArray( 0 ); CHECKGLERR;
+    glEnableVertexAttribArray( 1 ); CHECKGLERR;
+    if ( (mModeFlags & FLG_TEX) )
+    {
+        auto vp = []( c_auto idx, c_auto cnt, c_auto off )
         {
-            mLastVBOSize = newVBOSize;
-            glBufferData( GL_ARRAY_BUFFER, newVBOSize, 0, GL_DYNAMIC_DRAW );
-        }
-        CHECKGLERR;
+            glVertexAttribPointer(
+                idx, cnt, GL_FLOAT, GL_FALSE, sizeof(VtxPCT), (const void *)off );
+            CHECKGLERR;
+        };
+        vp( 0, 3, offsetof(VtxPCT,pos) );
+        vp( 1, 4, offsetof(VtxPCT,col) );
 
-        if ( (mModeFlags & FLG_TEX) )
-            glBufferSubData( GL_ARRAY_BUFFER, 0, newVBOSize, mVtxPCT.data() );
-        else
-            glBufferSubData( GL_ARRAY_BUFFER, 0, newVBOSize, mVtxPC.data() );
-        CHECKGLERR;
+        glEnableVertexAttribArray( 2 ); CHECKGLERR;
+        vp( 2, 2, offsetof(VtxPCT,tc0) );
 
         //
-        glBindVertexArray( mVAO );
-
-        glEnableVertexAttribArray( 0 );
-        CHECKGLERR;
-        glEnableVertexAttribArray( 1 );
-        CHECKGLERR;
-        if ( (mModeFlags & FLG_TEX) )
-        {
-            auto vp = []( c_auto idx, c_auto cnt, c_auto off )
-            {
-                glVertexAttribPointer( idx, cnt, GL_FLOAT, GL_FALSE, sizeof(VtxPCT), (const void *)off );
-                CHECKGLERR;
-            };
-            vp( 0, 3, offsetof(VtxPCT,pos) );
-            vp( 1, 4, offsetof(VtxPCT,col) );
-
-            glEnableVertexAttribArray( 2 );
-            CHECKGLERR;
-            vp( 2, 2, offsetof(VtxPCT,tc0) );
-
-            //
-            glActiveTexture( GL_TEXTURE0 );
-            CHECKGLERR;
-            glBindTexture( GL_TEXTURE_2D, mCurTexID );
-            CHECKGLERR;
-        }
-        else
-        {
-            auto vp = []( c_auto idx, c_auto cnt, c_auto off )
-            {
-                glVertexAttribPointer( idx, cnt, GL_FLOAT, GL_FALSE, sizeof(VtxPC), (const void *)off );
-                CHECKGLERR;
-            };
-            vp( 0, 3, offsetof(VtxPC,pos) );
-            vp( 1, 4, offsetof(VtxPC,col) );
-
-            glDisableVertexAttribArray( 2 );
-            CHECKGLERR;
-        }
-
-        //
-        if (c_auto progID = moShaProgs[(mModeFlags & FLG_TEX) ? 1 : 0]->GetProgramID();
-                   progID != mCurShaderProgram )
-        {
-            mCurShaderProgram = progID;
-            glUseProgram( progID );
-            CHECKGLERR;
-        }
+        glActiveTexture( GL_TEXTURE0 ); CHECKGLERR;
+        glBindTexture( GL_TEXTURE_2D, mCurTexID ); CHECKGLERR;
     }
     else
     {
-        glEnableClientState( GL_VERTEX_ARRAY );
-        glEnableClientState( GL_COLOR_ARRAY );
-
-        if ( (mModeFlags & FLG_TEX) )
+        auto vp = []( c_auto idx, c_auto cnt, c_auto off )
         {
-            glVertexPointer( 3, GL_FLOAT, sizeof(VtxPCT), &mVtxPCT[0].pos );
-            glColorPointer( 4, GL_FLOAT, sizeof(VtxPCT), &mVtxPCT[0].col );
+            glVertexAttribPointer(
+                idx, cnt, GL_FLOAT, GL_FALSE, sizeof(VtxPC), (const void *)off );
+            CHECKGLERR;
+        };
+        vp( 0, 3, offsetof(VtxPC,pos) );
+        vp( 1, 4, offsetof(VtxPC,col) );
 
-            assert( !!mCurTexID );
-
-            glEnableClientState( GL_TEXTURE_COORD_ARRAY );
-            glTexCoordPointer( 2, GL_FLOAT, sizeof(VtxPCT), &mVtxPCT[0].tc0 );
-
-            //
-            glEnable( GL_TEXTURE_2D );
-            glBindTexture( GL_TEXTURE_2D, mCurTexID );
-        }
-        else
-        {
-            glVertexPointer( 3, GL_FLOAT, sizeof(VtxPC), &mVtxPC[0].pos );
-            glColorPointer( 4, GL_FLOAT, sizeof(VtxPC), &mVtxPC[0].col );
-
-            glDisableClientState( GL_TEXTURE_COORD_ARRAY );
-
-            //
-            glDisable( GL_TEXTURE_2D );
-        }
+        glDisableVertexAttribArray( 2 ); CHECKGLERR;
     }
+
+    //
+    auto *pProg = moShaProgs[(mModeFlags & FLG_TEX) ? 1 : 0].get();
+    if ( mpCurShaProg != pProg )
+    {
+        mpCurShaProg = pProg;
+        glUseProgram( pProg->GetProgramID() ); CHECKGLERR;
+    }
+
+    // set the uniforms
+    pProg->SetUniform( "u_mtxPS", mCurMtxPS );
 
     //
     glDrawArrays( (mModeFlags & FLG_LINES) ? GL_LINES : GL_TRIANGLES, 0, n );
     CHECKGLERR;
 
-    if ( mUseShaders )
-    {
-        //glUseProgram( 0 );
-        glBindVertexArray( 0 );
+    //glUseProgram( 0 );
+    glBindVertexArray( 0 );
 
-        glBindBuffer( GL_ARRAY_BUFFER, 0 );
-        CHECKGLERR;
-    }
+    glBindBuffer( GL_ARRAY_BUFFER, 0 );
+    CHECKGLERR;
 
     mVtxPC.clear();
     mVtxPCT.clear();
