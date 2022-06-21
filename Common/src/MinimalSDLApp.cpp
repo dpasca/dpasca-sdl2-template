@@ -386,7 +386,37 @@ void MinimalSDLApp::SaveScreenshot( const std::string &pathFName )
         return;
 
     auto *pTmpSurf = SDL_CreateRGBSurfaceWithFormat( 0, w, h, 24, fmt );
-    SDL_RenderReadPixels( mpRenderer, nullptr, fmt, pTmpSurf->pixels, pTmpSurf->pitch );
+
+#ifdef ENABLE_OPENGL
+    if ( mpSDLGLContext )
+    {
+        //glReadBuffer( GL_FRONT );
+        glReadPixels( 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pTmpSurf->pixels );
+        auto *p = (uint8_t *)pTmpSurf->pixels;
+        for (int y=0; y < (h/2); ++y)
+        {
+            auto *p1 = p +    y    * (size_t)pTmpSurf->pitch;
+            auto *p2 = p + (h-y-1) * (size_t)pTmpSurf->pitch;
+            for (int x=0; x < (w*4); ++x)
+            {
+                std::swap( p1[x+0], p2[x+0] );
+                std::swap( p1[x+1], p2[x+1] );
+                std::swap( p1[x+2], p2[x+2] );
+            }
+        }
+        for (int y=0; y < h; ++y)
+        {
+            auto *p1 = p + y * (size_t)pTmpSurf->pitch;
+            for (int x=0; x < w; ++x)
+                std::swap( p1[x*4+0], p1[x*4+2] );
+        }
+    }
+    else
+#endif
+    {
+        SDL_RenderReadPixels( mpRenderer, nullptr, fmt, pTmpSurf->pixels, pTmpSurf->pitch );
+    }
+
     SDL_SaveBMP( pTmpSurf, pathFName.c_str() );
     SDL_FreeSurface( pTmpSurf );
 }
