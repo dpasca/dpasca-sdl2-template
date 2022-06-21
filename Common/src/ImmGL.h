@@ -116,14 +116,6 @@ public:
     template <typename PT>
     void DrawRectFill( const PT &pos, const IFloat2 &siz, const IColor4 &col );
 
-    void DrawRectFill( float x, float y, float w, float h, const IColor4 &col )
-    {
-        DrawRectFill( IFloat2{x,y}, {w,h}, col );
-    }
-    void DrawRectFill( float x, float y, float z, float w, float h, const IColor4 &col )
-    {
-        DrawRectFill( IFloat3{x,y,z}, {w,h}, col );
-    }
     void DrawRectFill( const IFloat4 &rc, const IColor4 &col )
     {
         DrawRectFill( IFloat2{rc[0],rc[1]}, IFloat2{rc[2],rc[3]}, col );
@@ -166,38 +158,32 @@ private:
     void switchModeFlags( IUInt flags );
 
     //==================================================================
-    template <typename D, typename S>
-    static void setQuadStripAsTrigsP(
-            D out_des[6], const S &v0, const S &v1, const S &v2, const S &v3 )
+    template <typename D, typename M, typename S>
+    static void setQuadStripAsTrigs(
+            D out[6], M member, const S &v0, const S &v1, const S &v2, const S &v3 )
     {
-        out_des[0].pos = v0;
-        out_des[1].pos = v1;
-        out_des[2].pos = v2;
-        out_des[3].pos = v3;
-        out_des[4].pos = v2;
-        out_des[5].pos = v1;
+        out[0].*member = v0;
+        out[1].*member = v1;
+        out[2].*member = v2;
+        out[3].*member = v3;
+        out[4].*member = v2;
+        out[5].*member = v1;
+    }
+
+    template <typename D, typename S>
+    static void setQuadStripAsTrigsP(D out[6],const S &v0,const S &v1,const S &v2,const S &v3)
+    {
+        setQuadStripAsTrigs( out, &D::pos, v0, v1, v2, v3 );
     }
     template <typename D, typename S>
-    static void setQuadStripAsTrigsC(
-            D out_des[6], const S &v0, const S &v1, const S &v2, const S &v3 )
+    static void setQuadStripAsTrigsC(D out[6],const S &v0,const S &v1,const S &v2,const S &v3)
     {
-        out_des[0].col = v0;
-        out_des[1].col = v1;
-        out_des[2].col = v2;
-        out_des[3].col = v3;
-        out_des[4].col = v2;
-        out_des[5].col = v1;
+        setQuadStripAsTrigs( out, &D::col, v0, v1, v2, v3 );
     }
     template <typename D, typename S>
-    static void setQuadStripAsTrigsT(
-            D out_des[6], const S &v0, const S &v1, const S &v2, const S &v3 )
+    static void setQuadStripAsTrigsT(D out[6],const S &v0,const S &v1,const S &v2,const S &v3)
     {
-        out_des[0].tc0 = v0;
-        out_des[1].tc0 = v1;
-        out_des[2].tc0 = v2;
-        out_des[3].tc0 = v3;
-        out_des[4].tc0 = v2;
-        out_des[5].tc0 = v1;
+        setQuadStripAsTrigs( out, &D::tc0, v0, v1, v2, v3 );
     }
 };
 
