@@ -55,6 +55,7 @@ class ImmGL
     IVec<IFloat3>   mVtxPos;
     IVec<IColor4>   mVtxCol;
     IVec<IFloat2>   mVtxTc0;
+    IVec<uint32_t>  mIdx;
 
     enum : size_t
     {
@@ -89,6 +90,9 @@ class ImmGL
     IUInt           mVBOs[VT_N]         {};
     size_t          mCurVBOSizes[VT_N]  {};
 
+    IUInt           mVAE        {};
+    size_t          mCurVAESize {};
+
 public:
     ImmGL();
     ~ImmGL();
@@ -104,6 +108,11 @@ public:
     void SetNoTexture() { SetTexture( 0 ); }
 
     void SetMtxPS( const IMat4 &m );
+
+    auto *AllocPos( size_t n ) { return growVec( mVtxPos, n ); }
+    auto *AllocCol( size_t n ) { return growVec( mVtxCol, n ); }
+    auto *AllocTc0( size_t n ) { return growVec( mVtxTc0, n ); }
+    auto *AllocIdx( size_t n ) { return growVec( mIdx, n ); }
 
     void DrawLine( const IFloat3 &p1, const IFloat3 &p2, const IColor4 &col );
     void DrawLine( const IFloat3 &p1, const IFloat3 &p2, const IColor4 &col1, const IColor4 &col2 );
@@ -186,8 +195,8 @@ inline void ImmGL::DrawLine(
         const IColor4 &col2 )
 {
     switchModeFlags( FLG_LINES | FLG_COL );
-    auto *pPos = growVec( mVtxPos, 2 );
-    auto *pCol = growVec( mVtxCol, 2 );
+    auto *pPos = AllocPos( 2 );
+    auto *pCol = AllocCol( 2 );
     pPos[0] = { p1[0], p1[1], 0 };
     pPos[1] = { p2[0], p2[1], 0 };
     pCol[0] = col1;
@@ -200,8 +209,8 @@ inline void ImmGL::DrawQuad(
             const std::array<IColor4,4> &cols )
 {
     switchModeFlags( FLG_COL );
-    auto *pPos = growVec( mVtxPos, 6 );
-    auto *pCol = growVec( mVtxCol, 6 );
+    auto *pPos = AllocPos( 6 );
+    auto *pCol = AllocCol( 6 );
     setQuadStripAsTrigs( pPos, poss[0], poss[1], poss[2], poss[3] );
     setQuadStripAsTrigs( pCol, cols[0], cols[1], cols[2], cols[3] );
 }
@@ -212,8 +221,8 @@ inline void ImmGL::DrawQuad(
             const IColor4 &col )
 {
     switchModeFlags( FLG_COL );
-    auto *pPos = growVec( mVtxPos, 6 );
-    auto *pCol = growVec( mVtxCol, 6 );
+    auto *pPos = AllocPos( 6 );
+    auto *pCol = AllocCol( 6 );
     setQuadStripAsTrigs( pPos, poss[0], poss[1], poss[2], poss[3] );
     setQuadStripAsTrigs( pCol, col, col, col, col );
 }

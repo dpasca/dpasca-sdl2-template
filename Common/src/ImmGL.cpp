@@ -319,11 +319,16 @@ ImmGL::ImmGL()
         }
     }
     CHECKGLERR;
+
+    // make the VAE
+    glGenBuffers( 1, &mVAE );
 }
 
 //==================================================================
 ImmGL::~ImmGL()
 {
+    glDeleteBuffers( 1, &mVAE );
+
     for (c_auto v : mVAOs)
         if ( v )
             glDeleteVertexArrays( 1, &v );
@@ -433,6 +438,33 @@ size_t ImmGL::makeVAOIdx( size_t posi, size_t coli, size_t tc0i )
 }
 
 //==================================================================
+inline auto updateBuff = []( auto &vec, c_auto type, c_auto &buff, auto &curSiz, bool bind )
+{
+    c_auto newSize = sizeof(vec[0]) * vec.size();
+    if NOT( newSize )
+        return;
+
+    if ( bind )
+    {
+        glBindBuffer( type, buff );
+        CHECKGLERR;
+    }
+
+    if ( newSize > curSiz ) // expand as necessary
+    {
+        curSiz = newSize;
+        glBufferData( type, newSize, 0, GL_DYNAMIC_DRAW );
+        CHECKGLERR;
+    }
+    glBufferSubData( type, 0, newSize, vec.data() );
+    if ( bind )
+    {
+        glBindBuffer( type, 0 );
+        CHECKGLERR;
+    }
+};
+
+//==================================================================
 void ImmGL::FlushPrims()
 {
     c_auto n = mVtxPos.size();
@@ -442,27 +474,9 @@ void ImmGL::FlushPrims()
     FLUSHGLERR; // forgive and forget
 
     // update the vertex buffers
-    auto updateData = [&]( c_auto vt, auto &vec )
-    {
-        c_auto newSize = sizeof(vec[0]) * vec.size();
-        if NOT( newSize )
-            return;
-
-        glBindBuffer( GL_ARRAY_BUFFER, mVBOs[vt] ); CHECKGLERR;
-
-        if ( newSize > mCurVBOSizes[vt] ) // expand as necessary
-        {
-            mCurVBOSizes[vt] = newSize;
-            glBufferData( GL_ARRAY_BUFFER, newSize, 0, GL_DYNAMIC_DRAW );
-            CHECKGLERR;
-        }
-        glBufferSubData( GL_ARRAY_BUFFER, 0, newSize, vec.data() );
-        glBindBuffer( GL_ARRAY_BUFFER, 0 );
-        CHECKGLERR;
-    };
-    updateData( VT_POS, mVtxPos );
-    updateData( VT_COL, mVtxCol );
-    updateData( VT_TC0, mVtxTc0 );
+    updateBuff( mVtxPos, GL_ARRAY_BUFFER, mVBOs[VT_POS], mCurVBOSizes[VT_POS], true );
+    updateBuff( mVtxCol, GL_ARRAY_BUFFER, mVBOs[VT_COL], mCurVBOSizes[VT_COL], true );
+    updateBuff( mVtxTc0, GL_ARRAY_BUFFER, mVBOs[VT_TC0], mCurVBOSizes[VT_TC0], true );
 
     // bind the VAO
     c_auto posi = (size_t)1;
@@ -495,8 +509,21 @@ void ImmGL::FlushPrims()
     pProg->SetUniform( "u_mtxPS", mCurMtxPS );
     CHECKGLERR;
 
-    // draw
-    glDrawArrays( (mModeFlags & FLG_LINES) ? GL_LINES : GL_TRIANGLES, 0, (GLsizei)n );
+    c_auto primType = (mModeFlags & FLG_LINES) ? GL_LINES : GL_TRIANGLES;
+
+    if NOT( mIdx.empty() )
+    {
+        glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, mVAE );
+        updateBuff( mIdx, GL_ELEMENT_ARRAY_BUFFER, mVAE, mCurVAESize, false );
+        // draw
+        glDrawElements( primType,  (GLsizei)mIdx.size(), GL_UNSIGNED_INT, nullptr );
+        glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+    }
+    else
+    {
+        // draw
+        glDrawArrays( primType, 0, (GLsizei)n );
+    }
     CHECKGLERR;
 
     // unbind everything
@@ -508,6 +535,7 @@ void ImmGL::FlushPrims()
     mVtxPos.clear();
     mVtxCol.clear();
     mVtxTc0.clear();
+    mIdx.clear();
 }
 
 //
