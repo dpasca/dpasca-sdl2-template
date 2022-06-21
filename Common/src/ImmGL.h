@@ -52,19 +52,17 @@ private:
 //==================================================================
 class ImmGL
 {
-    struct VtxPC
+    IVec<IFloat3>   mVtxPos;
+    IVec<IColor4>   mVtxCol;
+    IVec<IFloat2>   mVtxTc0;
+
+    enum : size_t
     {
-        IFloat3 pos;
-        IColor4 col;
+        VT_POS,
+        VT_COL,
+        VT_TC0,
+        VT_N
     };
-    struct VtxPCT
-    {
-        IFloat3 pos;
-        IColor4 col;
-        IFloat2 tc0;
-    };
-    IVec<VtxPC>     mVtxPC;
-    IVec<VtxPCT>    mVtxPCT;
 
     enum : int
     {
@@ -78,6 +76,7 @@ class ImmGL
     {
         FLG_LINES = 1 << 0,
         FLG_TEX   = 1 << 1,
+        FLG_COL   = 1 << 2,
     };
     IUInt           mModeFlags = 0;
     IUInt           mCurTexID = 0;
@@ -86,12 +85,13 @@ class ImmGL
 
     IVec<std::unique_ptr<ShaderProg>>   moShaProgs;
 
-    IUInt           mVAO = 0;
-    IUInt           mVBO = 0;
-    size_t          mLastVBOSize {};
+    IUInt           mVAOs[ 1 << VT_N ]  {};
+    IUInt           mVBOs[VT_N]         {};
+    size_t          mCurVBOSizes[VT_N]  {};
 
 public:
     ImmGL();
+    ~ImmGL();
 
     void ResetStates();
     void FlushPrims();
@@ -122,6 +122,8 @@ public:
     }
 
 private:
+    static size_t makeVAOIdx( size_t posi, size_t coli, size_t tc0i );
+
     //==================================================================
     template <typename T> static inline void resize_loose( IVec<T> &vec, size_t newSize )
     {
@@ -158,51 +160,23 @@ private:
     void switchModeFlags( IUInt flags );
 
     //==================================================================
-    template <typename D, typename M, typename S>
-    static void setQuadStripAsTrigs(
-            D out[6], M member, const S &v0, const S &v1, const S &v2, const S &v3 )
-    {
-        out[0].*member = v0;
-        out[1].*member = v1;
-        out[2].*member = v2;
-        out[3].*member = v3;
-        out[4].*member = v2;
-        out[5].*member = v1;
-    }
-
     template <typename D, typename S>
-    static void setQuadStripAsTrigsP(D out[6],const S &v0,const S &v1,const S &v2,const S &v3)
+    static void setQuadStripAsTrigs( D out[6], const S &v0, const S &v1, const S &v2, const S &v3 )
     {
-        setQuadStripAsTrigs( out, &D::pos, v0, v1, v2, v3 );
-    }
-    template <typename D, typename S>
-    static void setQuadStripAsTrigsC(D out[6],const S &v0,const S &v1,const S &v2,const S &v3)
-    {
-        setQuadStripAsTrigs( out, &D::col, v0, v1, v2, v3 );
-    }
-    template <typename D, typename S>
-    static void setQuadStripAsTrigsT(D out[6],const S &v0,const S &v1,const S &v2,const S &v3)
-    {
-        setQuadStripAsTrigs( out, &D::tc0, v0, v1, v2, v3 );
+        out[0] = v0;
+        out[1] = v1;
+        out[2] = v2;
+        out[3] = v3;
+        out[4] = v2;
+        out[5] = v1;
     }
 };
 
 //==================================================================
-inline void ImmGL::DrawLine(
-        const IFloat3 &p1,
-        const IFloat3 &p2,
-        const IColor4 &col )
+inline void ImmGL::DrawLine( const IFloat3 &p1, const IFloat3 &p2, const IColor4 &col )
 {
-    switchModeFlags( FLG_LINES );
-
-    auto *pVtx = growVec( mVtxPC, 2 );
-    pVtx[0].pos = { p1[0], p1[1], 0 };
-    pVtx[1].pos = { p2[0], p2[1], 0 };
-
-    pVtx[0].col =
-    pVtx[1].col = col;
+    DrawLine( p1, p2, col, col );
 }
-
 
 //==================================================================
 inline void ImmGL::DrawLine(
@@ -211,14 +185,13 @@ inline void ImmGL::DrawLine(
         const IColor4 &col1,
         const IColor4 &col2 )
 {
-    switchModeFlags( FLG_LINES );
-
-    auto *pVtx = growVec( mVtxPC, 2 );
-    pVtx[0].pos = { p1[0], p1[1], 0 };
-    pVtx[1].pos = { p2[0], p2[1], 0 };
-
-    pVtx[0].col = col1;
-    pVtx[1].col = col2;
+    switchModeFlags( FLG_LINES | FLG_COL );
+    auto *pPos = growVec( mVtxPos, 2 );
+    auto *pCol = growVec( mVtxCol, 2 );
+    pPos[0] = { p1[0], p1[1], 0 };
+    pPos[1] = { p2[0], p2[1], 0 };
+    pCol[0] = col1;
+    pCol[1] = col2;
 }
 
 //==================================================================
@@ -226,10 +199,11 @@ inline void ImmGL::DrawQuad(
             const std::array<IFloat3,4> &poss,
             const std::array<IColor4,4> &cols )
 {
-    switchModeFlags( 0 );
-    auto *pVtx = growVec( mVtxPC, 6 );
-    setQuadStripAsTrigsP( pVtx, poss[0], poss[1], poss[2], poss[3] );
-    setQuadStripAsTrigsC( pVtx, cols[0], cols[1], cols[2], cols[3] );
+    switchModeFlags( FLG_COL );
+    auto *pPos = growVec( mVtxPos, 6 );
+    auto *pCol = growVec( mVtxCol, 6 );
+    setQuadStripAsTrigs( pPos, poss[0], poss[1], poss[2], poss[3] );
+    setQuadStripAsTrigs( pCol, cols[0], cols[1], cols[2], cols[3] );
 }
 
 //==================================================================
@@ -237,10 +211,11 @@ inline void ImmGL::DrawQuad(
             const std::array<IFloat3,4> &poss,
             const IColor4 &col )
 {
-    switchModeFlags( 0 );
-    auto *pVtx = growVec( mVtxPC, 6 );
-    setQuadStripAsTrigsP( pVtx, poss[0], poss[1], poss[2], poss[3] );
-    setQuadStripAsTrigsC( pVtx, col, col, col, col );
+    switchModeFlags( FLG_COL );
+    auto *pPos = growVec( mVtxPos, 6 );
+    auto *pCol = growVec( mVtxCol, 6 );
+    setQuadStripAsTrigs( pPos, poss[0], poss[1], poss[2], poss[3] );
+    setQuadStripAsTrigs( pCol, col, col, col, col );
 }
 
 //==================================================================

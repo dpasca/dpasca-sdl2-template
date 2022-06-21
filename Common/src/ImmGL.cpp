@@ -284,11 +284,51 @@ ImmGL::ImmGL()
     moShaProgs.push_back( std::make_unique<ShaderProg>( false ) );
     moShaProgs.push_back( std::make_unique<ShaderProg>( true ) );
 
-    glGenBuffers( 1, &mVBO );
+    // make the VBOs
+    glGenBuffers( VT_N, &mVBOs[0] );
     CHECKGLERR;
 
-    glGenVertexArrays( 1, &mVAO );
+    for (size_t posi=1; posi < 2; ++posi)
+    {
+        for (size_t coli=0; coli < 2; ++coli)
+        {
+            for (size_t tc0i=0; tc0i < 2; ++tc0i)
+            {
+                IUInt vao {};
+                glGenVertexArrays( 1, &vao );
+                glBindVertexArray( vao );
+
+                mVAOs[ makeVAOIdx( posi, coli, tc0i ) ] = vao;
+
+                if ( posi ) glEnableVertexAttribArray( 0 );
+                if ( coli ) glEnableVertexAttribArray( 1 );
+                if ( tc0i ) glEnableVertexAttribArray( 2 );
+
+                auto vap = [this]( GLuint idx, GLuint cnt )
+                {
+                    glBindBuffer( GL_ARRAY_BUFFER, mVBOs[idx] );
+                    glVertexAttribPointer( idx, cnt, GL_FLOAT, GL_FALSE, 0, nullptr );
+                };
+
+                if ( posi ) vap( 0, 3 );
+                if ( coli ) vap( 1, 4 );
+                if ( tc0i ) vap( 2, 2 );
+
+                glBindVertexArray( 0 );
+            }
+        }
+    }
     CHECKGLERR;
+}
+
+//==================================================================
+ImmGL::~ImmGL()
+{
+    for (c_auto v : mVAOs)
+        if ( v )
+            glDeleteVertexArrays( 1, &v );
+
+    glDeleteBuffers( (GLsizei)VT_N, &mVBOs[0] );
 }
 
 //==================================================================
@@ -387,71 +427,63 @@ void ImmGL::ResetStates()
 }
 
 //==================================================================
+size_t ImmGL::makeVAOIdx( size_t posi, size_t coli, size_t tc0i )
+{
+    return (tc0i<<VT_TC0) | (coli<<VT_COL) | (posi<<VT_POS);
+}
+
+//==================================================================
 void ImmGL::FlushPrims()
 {
-    c_auto n = (GLsizei)((mModeFlags & FLG_TEX) ? mVtxPCT.size() : mVtxPC.size());
+    c_auto n = mVtxPos.size();
     if NOT( n )
         return;
 
-    FLUSHGLERR;
-    c_auto newVBOSize  = (mModeFlags & FLG_TEX)
-                        ? mVtxPCT.size() * sizeof(mVtxPCT[0])
-                        : mVtxPC.size()  * sizeof(mVtxPC[0]);
+    FLUSHGLERR; // forgive and forget
 
-    glBindBuffer( GL_ARRAY_BUFFER, mVBO ); CHECKGLERR;
-
-    // expand as necessary
-    if ( mLastVBOSize != newVBOSize )
+    // update the vertex buffers
+    auto updateData = [&]( c_auto vt, auto &vec )
     {
-        mLastVBOSize = newVBOSize;
-        glBufferData( GL_ARRAY_BUFFER, newVBOSize, 0, GL_DYNAMIC_DRAW );
-        CHECKGLERR;
-    }
+        c_auto newSize = sizeof(vec[0]) * vec.size();
+        if NOT( newSize )
+            return;
 
-    if ( (mModeFlags & FLG_TEX) )
-        glBufferSubData( GL_ARRAY_BUFFER, 0, newVBOSize, mVtxPCT.data() );
-    else
-        glBufferSubData( GL_ARRAY_BUFFER, 0, newVBOSize, mVtxPC.data() );
+        glBindBuffer( GL_ARRAY_BUFFER, mVBOs[vt] ); CHECKGLERR;
+
+        if ( newSize > mCurVBOSizes[vt] ) // expand as necessary
+        {
+            mCurVBOSizes[vt] = newSize;
+            glBufferData( GL_ARRAY_BUFFER, newSize, 0, GL_DYNAMIC_DRAW );
+            CHECKGLERR;
+        }
+        glBufferSubData( GL_ARRAY_BUFFER, 0, newSize, vec.data() );
+        glBindBuffer( GL_ARRAY_BUFFER, 0 );
+        CHECKGLERR;
+    };
+    updateData( VT_POS, mVtxPos );
+    updateData( VT_COL, mVtxCol );
+    updateData( VT_TC0, mVtxTc0 );
+
+    // bind the VAO
+    c_auto posi = (size_t)1;
+    c_auto coli = (size_t)!!(mModeFlags & FLG_COL);
+    c_auto tc0i = (size_t)!!(mModeFlags & FLG_TEX);
+    glBindVertexArray( mVAOs[ makeVAOIdx( posi, coli, tc0i ) ] );
     CHECKGLERR;
 
-    //
-    glBindVertexArray( mVAO );
-
-    glEnableVertexAttribArray( 0 ); CHECKGLERR;
-    glEnableVertexAttribArray( 1 ); CHECKGLERR;
+    // set the texture
     if ( (mModeFlags & FLG_TEX) )
     {
-        auto vp = []( c_auto idx, c_auto cnt, c_auto off )
-        {
-            glVertexAttribPointer(
-                idx, cnt, GL_FLOAT, GL_FALSE, sizeof(VtxPCT), (const void *)off );
-            CHECKGLERR;
-        };
-        vp( 0, 3, offsetof(VtxPCT,pos) );
-        vp( 1, 4, offsetof(VtxPCT,col) );
-
-        glEnableVertexAttribArray( 2 ); CHECKGLERR;
-        vp( 2, 2, offsetof(VtxPCT,tc0) );
-
-        //
-        glActiveTexture( GL_TEXTURE0 ); CHECKGLERR;
-        glBindTexture( GL_TEXTURE_2D, mCurTexID ); CHECKGLERR;
+        glActiveTexture( GL_TEXTURE0 );
+        glBindTexture( GL_TEXTURE_2D, mCurTexID );
     }
     else
     {
-        auto vp = []( c_auto idx, c_auto cnt, c_auto off )
-        {
-            glVertexAttribPointer(
-                idx, cnt, GL_FLOAT, GL_FALSE, sizeof(VtxPC), (const void *)off );
-            CHECKGLERR;
-        };
-        vp( 0, 3, offsetof(VtxPC,pos) );
-        vp( 1, 4, offsetof(VtxPC,col) );
-
-        glDisableVertexAttribArray( 2 ); CHECKGLERR;
+        glBindTexture( GL_TEXTURE_2D, 0 );
     }
+    CHECKGLERR;
 
-    //
+    // set the program
     auto *pProg = moShaProgs[(mModeFlags & FLG_TEX) ? 1 : 0].get();
     if ( mpCurShaProg != pProg )
     {
@@ -461,19 +493,21 @@ void ImmGL::FlushPrims()
 
     // set the uniforms
     pProg->SetUniform( "u_mtxPS", mCurMtxPS );
-
-    //
-    glDrawArrays( (mModeFlags & FLG_LINES) ? GL_LINES : GL_TRIANGLES, 0, n );
     CHECKGLERR;
 
+    // draw
+    glDrawArrays( (mModeFlags & FLG_LINES) ? GL_LINES : GL_TRIANGLES, 0, (GLsizei)n );
+    CHECKGLERR;
+
+    // unbind everything
     //glUseProgram( 0 );
     glBindVertexArray( 0 );
-
-    glBindBuffer( GL_ARRAY_BUFFER, 0 );
     CHECKGLERR;
 
-    mVtxPC.clear();
-    mVtxPCT.clear();
+    // reset the buffers
+    mVtxPos.clear();
+    mVtxCol.clear();
+    mVtxTc0.clear();
 }
 
 //
