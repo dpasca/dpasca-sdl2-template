@@ -100,7 +100,7 @@ static std::vector<Float3> makeTerrVerts( auto &terr, float sca )
 //==================================================================
 static auto makeRendCol = []( RBColType src )
 {
-    return IColor4((float)src[0],(float)src[1],(float)src[2],(float)src[3]) * (1.f/255) );
+    return IColor4((float)src[0],(float)src[1],(float)src[2],(float)src[3]) * (1.f/255);
 };
 
 //==================================================================
@@ -141,10 +141,10 @@ static void drawTerrain(
         c_auto row1 = (yi+1) << terr.GetSizL2();
         for (size_t xi=xi1; xi < xi2; ++xi)
         {
-            c_auto i00 = row0 + xi+0;
-            c_auto i01 = row0 + xi+1;
-            c_auto i10 = row1 + xi+0;
-            c_auto i11 = row1 + xi+1;
+            c_auto i00 = (uint32_t)(row0 + xi+0);
+            c_auto i01 = (uint32_t)(row0 + xi+1);
+            c_auto i10 = (uint32_t)(row1 + xi+0);
+            c_auto i11 = (uint32_t)(row1 + xi+1);
             ImmGL::SetQuadStripAsTrigs( immgl.AllocIdx( 6 ), i00, i01, i10, i11 );
         }
     }
