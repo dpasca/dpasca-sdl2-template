@@ -395,6 +395,21 @@ void ImmGL::SetMtxPS( const IMat4 &m )
 }
 
 //==================================================================
+void ImmGL::BeginMesh()
+{
+    FlushPrims();
+}
+
+void ImmGL::EndMesh()
+{
+    mModeFlags = 0
+        | (!mVtxCol.empty() ? FLG_COL : 0)
+        | (!mVtxTc0.empty() ? FLG_TEX : 0);
+
+    FlushPrims();
+}
+
+//==================================================================
 void ImmGL::switchModeFlags( IUInt flags )
 {
     if ( mModeFlags == flags )

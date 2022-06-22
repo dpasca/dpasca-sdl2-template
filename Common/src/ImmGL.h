@@ -130,6 +130,19 @@ public:
         DrawRectFill( IFloat2{rc[0],rc[1]}, IFloat2{rc[2],rc[3]}, col );
     }
 
+    void BeginMesh();
+    void EndMesh();
+
+    template <typename D, typename S>
+    static void SetQuadStripAsTrigs( D *out, const S &v0, const S &v1, const S &v2, const S &v3 )
+    {
+        out[0] = v0;
+        out[1] = v1;
+        out[2] = v2;
+        out[3] = v3;
+        out[4] = v2;
+        out[5] = v1;
+    }
 private:
     static size_t makeVAOIdx( size_t posi, size_t coli, size_t tc0i );
 
@@ -167,18 +180,6 @@ private:
     }
 
     void switchModeFlags( IUInt flags );
-
-    //==================================================================
-    template <typename D, typename S>
-    static void setQuadStripAsTrigs( D out[6], const S &v0, const S &v1, const S &v2, const S &v3 )
-    {
-        out[0] = v0;
-        out[1] = v1;
-        out[2] = v2;
-        out[3] = v3;
-        out[4] = v2;
-        out[5] = v1;
-    }
 };
 
 //==================================================================
@@ -211,8 +212,8 @@ inline void ImmGL::DrawQuad(
     switchModeFlags( FLG_COL );
     auto *pPos = AllocPos( 6 );
     auto *pCol = AllocCol( 6 );
-    setQuadStripAsTrigs( pPos, poss[0], poss[1], poss[2], poss[3] );
-    setQuadStripAsTrigs( pCol, cols[0], cols[1], cols[2], cols[3] );
+    SetQuadStripAsTrigs( pPos, poss[0], poss[1], poss[2], poss[3] );
+    SetQuadStripAsTrigs( pCol, cols[0], cols[1], cols[2], cols[3] );
 }
 
 //==================================================================
@@ -223,8 +224,8 @@ inline void ImmGL::DrawQuad(
     switchModeFlags( FLG_COL );
     auto *pPos = AllocPos( 6 );
     auto *pCol = AllocCol( 6 );
-    setQuadStripAsTrigs( pPos, poss[0], poss[1], poss[2], poss[3] );
-    setQuadStripAsTrigs( pCol, col, col, col, col );
+    SetQuadStripAsTrigs( pPos, poss[0], poss[1], poss[2], poss[3] );
+    SetQuadStripAsTrigs( pCol, col, col, col, col );
 }
 
 //==================================================================

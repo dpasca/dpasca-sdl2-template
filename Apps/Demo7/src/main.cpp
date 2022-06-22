@@ -24,6 +24,8 @@
 #include "ImmGL.h"
 #include "MinimalSDLApp.h"
 
+#define MESH_MODE
+
 //==================================================================
 static constexpr float DISP_TERR_SCALE  = 10.f;
 
@@ -96,6 +98,12 @@ static std::vector<Float3> makeTerrVerts( auto &terr, float sca )
 }
 
 //==================================================================
+static auto makeRendCol = []( RBColType src )
+{
+    return IColor4((float)src[0],(float)src[1],(float)src[2],(float)src[3]) * (1.f/255) );
+};
+
+//==================================================================
 static void drawTerrain(
         const auto &terr,
         const auto &terrVerts,
@@ -114,6 +122,19 @@ static void drawTerrain(
     immgl.SetMtxPS( proj_obj );
 
     c_auto oosiz = 1.f / siz;
+#ifdef MESH_MODE
+    immgl.BeginMesh();
+    // verts
+    {
+        auto *pPos = immgl.AllocPos( terrVerts.size() );
+        auto *pCol = immgl.AllocCol( terrVerts.size() );
+        for (size_t i=0; i < terrVerts.size(); ++i)
+        {
+            pPos[i] = terrVerts[i];
+            pCol[i] = makeRendCol( terr.mBakedCols[ i ] );
+        }
+    }
+    // indexes
     for (size_t yi=yi1; yi < yi2; ++yi)
     {
         c_auto row0 = (yi+0) << terr.GetSizL2();
@@ -124,19 +145,28 @@ static void drawTerrain(
             c_auto i01 = row0 + xi+1;
             c_auto i10 = row1 + xi+0;
             c_auto i11 = row1 + xi+1;
-
-            c_auto &col = terr.mBakedCols[ i00 ];
-
+            ImmGL::SetQuadStripAsTrigs( immgl.AllocIdx( 6 ), i00, i01, i10, i11 );
+        }
+    }
+    immgl.EndMesh();
+#else
+    for (size_t yi=yi1; yi < yi2; ++yi)
+    {
+        c_auto row0 = (yi+0) << terr.GetSizL2();
+        c_auto row1 = (yi+1) << terr.GetSizL2();
+        for (size_t xi=xi1; xi < xi2; ++xi)
+        {
+            c_auto i00 = row0 + xi+0;
+            c_auto i01 = row0 + xi+1;
+            c_auto i10 = row1 + xi+0;
+            c_auto i11 = row1 + xi+1;
             immgl.DrawQuad({
                 terrVerts[ i00 ], terrVerts[ i01 ],
                 terrVerts[ i10 ], terrVerts[ i11 ]},
-                IColor4(
-                    (float)col[0],
-                    (float)col[1],
-                    (float)col[2],
-                    (float)col[3] ) * (1.f/255) );
+                makeRendCol( terr.mBakedCols[ i00 ] ) );
         }
     }
+#endif
 }
 
 //==================================================================
