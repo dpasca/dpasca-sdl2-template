@@ -123,11 +123,11 @@ static void drawTerrain(
 
     c_auto oosiz = 1.f / siz;
 #ifdef MESH_MODE
-    immgl.BeginMesh();
+    auto &lst = immgl.BeginMesh();
     // verts
     {
-        auto *pPos = immgl.AllocPos( terrVerts.size() );
-        auto *pCol = immgl.AllocCol( terrVerts.size() );
+        auto *pPos = lst.AllocPos( terrVerts.size() );
+        auto *pCol = lst.AllocCol( terrVerts.size() );
         for (size_t i=0; i < terrVerts.size(); ++i)
         {
             pPos[i] = terrVerts[i];
@@ -145,7 +145,7 @@ static void drawTerrain(
             c_auto i01 = (uint32_t)(row0 + xi+1);
             c_auto i10 = (uint32_t)(row1 + xi+0);
             c_auto i11 = (uint32_t)(row1 + xi+1);
-            ImmGL::SetQuadStripAsTrigs( immgl.AllocIdx( 6 ), i00, i01, i10, i11 );
+            ImmGL_MakeQuadOfTrigs( lst.AllocIdx( 6 ), i00, i01, i10, i11 );
         }
     }
     immgl.EndMesh();

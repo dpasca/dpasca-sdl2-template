@@ -28,6 +28,36 @@ using IUInt = unsigned int;
 using IStr  = std::string;
 
 //==================================================================
+template <typename T> static inline void resize_loose( IVec<T> &vec, size_t newSize )
+{
+    if ( newSize > vec.capacity() )
+    {
+        auto locmax = []( auto a, auto b ) { return a > b ? a : b; };
+        vec.reserve( locmax( newSize, vec.capacity()/2*3 ) );
+    }
+    vec.resize( newSize );
+}
+//
+template <typename T> static inline T *grow_vec( IVec<T> &vec, size_t growN )
+{
+    size_t n = vec.size();
+    resize_loose<T>( vec, n + growN );
+    return vec.data() + n;
+}
+
+//==================================================================
+template <typename D, typename S>
+static void ImmGL_MakeQuadOfTrigs( D *out, const S &v0, const S &v1, const S &v2, const S &v3 )
+{
+    out[0] = v0;
+    out[1] = v1;
+    out[2] = v2;
+    out[3] = v3;
+    out[4] = v2;
+    out[5] = v1;
+}
+
+//==================================================================
 class ShaderProg
 {
 public:
@@ -77,6 +107,11 @@ private:
 public:
     ImmGLList();
     ~ImmGLList();
+
+    auto *AllocPos( size_t n ) { return grow_vec( mVtxPos, n ); }
+    auto *AllocCol( size_t n ) { return grow_vec( mVtxCol, n ); }
+    auto *AllocTc0( size_t n ) { return grow_vec( mVtxTc0, n ); }
+    auto *AllocIdx( size_t n ) { return grow_vec( mIdx, n ); }
 
     void UpdateBuffers();
 
@@ -137,11 +172,6 @@ public:
 
     void SetMtxPS( const IMat4 &m );
 
-    auto *AllocPos( size_t n ) { return growVec( mList.mVtxPos, n ); }
-    auto *AllocCol( size_t n ) { return growVec( mList.mVtxCol, n ); }
-    auto *AllocTc0( size_t n ) { return growVec( mList.mVtxTc0, n ); }
-    auto *AllocIdx( size_t n ) { return growVec( mList.mIdx, n ); }
-
     void DrawLine( const IFloat3 &p1, const IFloat3 &p2, const IColor4 &col );
     void DrawLine( const IFloat3 &p1, const IFloat3 &p2, const IColor4 &col1, const IColor4 &col2 );
 
@@ -158,38 +188,10 @@ public:
         DrawRectFill( IFloat2{rc[0],rc[1]}, IFloat2{rc[2],rc[3]}, col );
     }
 
-    void BeginMesh();
+    ImmGLList &BeginMesh();
     void EndMesh();
 
-    template <typename D, typename S>
-    static void SetQuadStripAsTrigs( D *out, const S &v0, const S &v1, const S &v2, const S &v3 )
-    {
-        out[0] = v0;
-        out[1] = v1;
-        out[2] = v2;
-        out[3] = v3;
-        out[4] = v2;
-        out[5] = v1;
-    }
 private:
-    //==================================================================
-    template <typename T> static inline void resize_loose( IVec<T> &vec, size_t newSize )
-    {
-        if ( newSize > vec.capacity() )
-        {
-            auto locmax = []( auto a, auto b ) { return a > b ? a : b; };
-            vec.reserve( locmax( newSize, vec.capacity()/2*3 ) );
-        }
-        vec.resize( newSize );
-    }
-    //
-    template <typename T> static inline T *growVec( IVec<T> &vec, size_t growN )
-    {
-        size_t n = vec.size();
-        resize_loose<T>( vec, n + growN );
-        return vec.data() + n;
-    }
-
     std::array<IFloat3,4> makeRectVtxPos( const IFloat2 &pos, const IFloat2 &siz ) const
     {
         return { IFloat3{pos[0]+siz[0]*0, pos[1]+siz[1]*0, 0},
@@ -222,8 +224,8 @@ inline void ImmGL::DrawLine(
         const IColor4 &col2 )
 {
     switchModeFlags( FLG_LINES | FLG_COL );
-    auto *pPos = AllocPos( 2 );
-    auto *pCol = AllocCol( 2 );
+    auto *pPos = mList.AllocPos( 2 );
+    auto *pCol = mList.AllocCol( 2 );
     pPos[0] = { p1[0], p1[1], 0 };
     pPos[1] = { p2[0], p2[1], 0 };
     pCol[0] = col1;
@@ -236,10 +238,10 @@ inline void ImmGL::DrawQuad(
             const std::array<IColor4,4> &cols )
 {
     switchModeFlags( FLG_COL );
-    auto *pPos = AllocPos( 6 );
-    auto *pCol = AllocCol( 6 );
-    SetQuadStripAsTrigs( pPos, poss[0], poss[1], poss[2], poss[3] );
-    SetQuadStripAsTrigs( pCol, cols[0], cols[1], cols[2], cols[3] );
+    auto *pPos = mList.AllocPos( 6 );
+    auto *pCol = mList.AllocCol( 6 );
+    ImmGL_MakeQuadOfTrigs( pPos, poss[0], poss[1], poss[2], poss[3] );
+    ImmGL_MakeQuadOfTrigs( pCol, cols[0], cols[1], cols[2], cols[3] );
 }
 
 //==================================================================
@@ -248,10 +250,10 @@ inline void ImmGL::DrawQuad(
             const IColor4 &col )
 {
     switchModeFlags( FLG_COL );
-    auto *pPos = AllocPos( 6 );
-    auto *pCol = AllocCol( 6 );
-    SetQuadStripAsTrigs( pPos, poss[0], poss[1], poss[2], poss[3] );
-    SetQuadStripAsTrigs( pCol, col, col, col, col );
+    auto *pPos = mList.AllocPos( 6 );
+    auto *pCol = mList.AllocCol( 6 );
+    ImmGL_MakeQuadOfTrigs( pPos, poss[0], poss[1], poss[2], poss[3] );
+    ImmGL_MakeQuadOfTrigs( pCol, col, col, col, col );
 }
 
 //==================================================================

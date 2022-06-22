@@ -478,9 +478,10 @@ void ImmGL::SetMtxPS( const IMat4 &m )
 }
 
 //==================================================================
-void ImmGL::BeginMesh()
+ImmGLList &ImmGL::BeginMesh()
 {
     FlushPrims();
+    return mList;
 }
 
 void ImmGL::EndMesh()
