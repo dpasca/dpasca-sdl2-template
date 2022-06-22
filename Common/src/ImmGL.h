@@ -49,21 +49,56 @@ private:
     IUInt getLoc( const char *pName );
 };
 
-//==================================================================
-class ImmGL
+enum : size_t
 {
+    IMMGL_VT_POS,
+    IMMGL_VT_COL,
+    IMMGL_VT_TC0,
+    IMMGL_VT_N
+};
+
+//==================================================================
+class ImmGLList
+{
+public:
     IVec<IFloat3>   mVtxPos;
     IVec<IColor4>   mVtxCol;
     IVec<IFloat2>   mVtxTc0;
     IVec<uint32_t>  mIdx;
 
-    enum : size_t
+private:
+    IUInt           mVAOs[ 1 << IMMGL_VT_N ]  {};
+    IUInt           mVBOs[IMMGL_VT_N]         {};
+    size_t          mCurVBOSizes[IMMGL_VT_N]  {};
+
+    IUInt           mVAE        {};
+    size_t          mCurVAESize {};
+
+public:
+    ImmGLList();
+    ~ImmGLList();
+
+    void UpdateBuffers();
+
+    void BindVAO() const;
+
+    void DrawList( IUInt primType );
+
+    void ClearList()
     {
-        VT_POS,
-        VT_COL,
-        VT_TC0,
-        VT_N
-    };
+        mVtxPos.clear();
+        mVtxCol.clear();
+        mVtxTc0.clear();
+        mIdx.clear();
+    }
+private:
+    static size_t makeVAOIdx( size_t posi, size_t coli, size_t tc0i );
+};
+
+//==================================================================
+class ImmGL
+{
+    ImmGLList       mList;
 
     enum : int
     {
@@ -86,13 +121,6 @@ class ImmGL
 
     IVec<std::unique_ptr<ShaderProg>>   moShaProgs;
 
-    IUInt           mVAOs[ 1 << VT_N ]  {};
-    IUInt           mVBOs[VT_N]         {};
-    size_t          mCurVBOSizes[VT_N]  {};
-
-    IUInt           mVAE        {};
-    size_t          mCurVAESize {};
-
 public:
     ImmGL();
     ~ImmGL();
@@ -109,10 +137,10 @@ public:
 
     void SetMtxPS( const IMat4 &m );
 
-    auto *AllocPos( size_t n ) { return growVec( mVtxPos, n ); }
-    auto *AllocCol( size_t n ) { return growVec( mVtxCol, n ); }
-    auto *AllocTc0( size_t n ) { return growVec( mVtxTc0, n ); }
-    auto *AllocIdx( size_t n ) { return growVec( mIdx, n ); }
+    auto *AllocPos( size_t n ) { return growVec( mList.mVtxPos, n ); }
+    auto *AllocCol( size_t n ) { return growVec( mList.mVtxCol, n ); }
+    auto *AllocTc0( size_t n ) { return growVec( mList.mVtxTc0, n ); }
+    auto *AllocIdx( size_t n ) { return growVec( mList.mIdx, n ); }
 
     void DrawLine( const IFloat3 &p1, const IFloat3 &p2, const IColor4 &col );
     void DrawLine( const IFloat3 &p1, const IFloat3 &p2, const IColor4 &col1, const IColor4 &col2 );
@@ -144,8 +172,6 @@ public:
         out[5] = v1;
     }
 private:
-    static size_t makeVAOIdx( size_t posi, size_t coli, size_t tc0i );
-
     //==================================================================
     template <typename T> static inline void resize_loose( IVec<T> &vec, size_t newSize )
     {

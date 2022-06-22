@@ -277,15 +277,43 @@ void ShaderProg::SetUniform( const char *pName, const IFloat4 &v )
 
 //==================================================================
 //==================================================================
-ImmGL::ImmGL()
+size_t ImmGLList::makeVAOIdx( size_t posi, size_t coli, size_t tc0i )
 {
-    FLUSHGLERR;
+    return (tc0i<<IMMGL_VT_TC0) | (coli<<IMMGL_VT_COL) | (posi<<IMMGL_VT_POS);
+}
 
-    moShaProgs.push_back( std::make_unique<ShaderProg>( false ) );
-    moShaProgs.push_back( std::make_unique<ShaderProg>( true ) );
+//==================================================================
+inline auto updateBuff = []( auto &vec, c_auto type, c_auto &buff, auto &curSiz, bool bind )
+{
+    c_auto newSize = sizeof(vec[0]) * vec.size();
+    if NOT( newSize )
+        return;
 
+    if ( bind )
+    {
+        glBindBuffer( type, buff );
+        CHECKGLERR;
+    }
+
+    if ( newSize > curSiz ) // expand as necessary
+    {
+        curSiz = newSize;
+        glBufferData( type, newSize, 0, GL_DYNAMIC_DRAW );
+        CHECKGLERR;
+    }
+    glBufferSubData( type, 0, newSize, vec.data() );
+    if ( bind )
+    {
+        glBindBuffer( type, 0 );
+        CHECKGLERR;
+    }
+};
+
+//==================================================================
+ImmGLList::ImmGLList()
+{
     // make the VBOs
-    glGenBuffers( VT_N, &mVBOs[0] );
+    glGenBuffers( IMMGL_VT_N, &mVBOs[0] );
     CHECKGLERR;
 
     for (size_t posi=1; posi < 2; ++posi)
@@ -325,7 +353,7 @@ ImmGL::ImmGL()
 }
 
 //==================================================================
-ImmGL::~ImmGL()
+ImmGLList::~ImmGLList()
 {
     glDeleteBuffers( 1, &mVAE );
 
@@ -333,7 +361,62 @@ ImmGL::~ImmGL()
         if ( v )
             glDeleteVertexArrays( 1, &v );
 
-    glDeleteBuffers( (GLsizei)VT_N, &mVBOs[0] );
+    glDeleteBuffers( (GLsizei)IMMGL_VT_N, &mVBOs[0] );
+}
+
+//==================================================================
+void ImmGLList::UpdateBuffers()
+{
+    updateBuff( mVtxPos,
+        GL_ARRAY_BUFFER, mVBOs[IMMGL_VT_POS], mCurVBOSizes[IMMGL_VT_POS], true );
+    updateBuff( mVtxCol,
+        GL_ARRAY_BUFFER, mVBOs[IMMGL_VT_COL], mCurVBOSizes[IMMGL_VT_COL], true );
+    updateBuff( mVtxTc0,
+        GL_ARRAY_BUFFER, mVBOs[IMMGL_VT_TC0], mCurVBOSizes[IMMGL_VT_TC0], true );
+}
+
+//==================================================================
+void ImmGLList::BindVAO() const
+{
+    c_auto posi = (size_t)1;
+    c_auto coli = (size_t)!mVtxCol.empty();
+    c_auto tc0i = (size_t)!mVtxTc0.empty();
+    glBindVertexArray( mVAOs[ makeVAOIdx( posi, coli, tc0i ) ] );
+    CHECKGLERR;
+}
+
+//==================================================================
+void ImmGLList::DrawList( IUInt primType )
+{
+    if NOT( mIdx.empty() )
+    {
+        glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, mVAE );
+        updateBuff( mIdx, GL_ELEMENT_ARRAY_BUFFER, mVAE, mCurVAESize, false );
+        // draw
+        glDrawElements( primType,  (GLsizei)mIdx.size(), GL_UNSIGNED_INT, nullptr );
+        glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+    }
+    else
+    {
+        // draw
+        glDrawArrays( primType, 0, (GLsizei)mVtxPos.size() );
+    }
+    CHECKGLERR;
+}
+
+//==================================================================
+//==================================================================
+ImmGL::ImmGL()
+{
+    FLUSHGLERR;
+
+    moShaProgs.push_back( std::make_unique<ShaderProg>( false ) );
+    moShaProgs.push_back( std::make_unique<ShaderProg>( true ) );
+}
+
+//==================================================================
+ImmGL::~ImmGL()
+{
 }
 
 //==================================================================
@@ -403,8 +486,8 @@ void ImmGL::BeginMesh()
 void ImmGL::EndMesh()
 {
     mModeFlags = 0
-        | (!mVtxCol.empty() ? FLG_COL : 0)
-        | (!mVtxTc0.empty() ? FLG_TEX : 0);
+        | (!mList.mVtxCol.empty() ? FLG_COL : 0)
+        | (!mList.mVtxTc0.empty() ? FLG_TEX : 0);
 
     FlushPrims();
 }
@@ -447,58 +530,18 @@ void ImmGL::ResetStates()
 }
 
 //==================================================================
-size_t ImmGL::makeVAOIdx( size_t posi, size_t coli, size_t tc0i )
-{
-    return (tc0i<<VT_TC0) | (coli<<VT_COL) | (posi<<VT_POS);
-}
-
-//==================================================================
-inline auto updateBuff = []( auto &vec, c_auto type, c_auto &buff, auto &curSiz, bool bind )
-{
-    c_auto newSize = sizeof(vec[0]) * vec.size();
-    if NOT( newSize )
-        return;
-
-    if ( bind )
-    {
-        glBindBuffer( type, buff );
-        CHECKGLERR;
-    }
-
-    if ( newSize > curSiz ) // expand as necessary
-    {
-        curSiz = newSize;
-        glBufferData( type, newSize, 0, GL_DYNAMIC_DRAW );
-        CHECKGLERR;
-    }
-    glBufferSubData( type, 0, newSize, vec.data() );
-    if ( bind )
-    {
-        glBindBuffer( type, 0 );
-        CHECKGLERR;
-    }
-};
-
-//==================================================================
 void ImmGL::FlushPrims()
 {
-    c_auto n = mVtxPos.size();
-    if NOT( n )
+    if ( mList.mVtxPos.empty() )
         return;
 
     FLUSHGLERR; // forgive and forget
 
     // update the vertex buffers
-    updateBuff( mVtxPos, GL_ARRAY_BUFFER, mVBOs[VT_POS], mCurVBOSizes[VT_POS], true );
-    updateBuff( mVtxCol, GL_ARRAY_BUFFER, mVBOs[VT_COL], mCurVBOSizes[VT_COL], true );
-    updateBuff( mVtxTc0, GL_ARRAY_BUFFER, mVBOs[VT_TC0], mCurVBOSizes[VT_TC0], true );
+    mList.UpdateBuffers();
 
     // bind the VAO
-    c_auto posi = (size_t)1;
-    c_auto coli = (size_t)!!(mModeFlags & FLG_COL);
-    c_auto tc0i = (size_t)!!(mModeFlags & FLG_TEX);
-    glBindVertexArray( mVAOs[ makeVAOIdx( posi, coli, tc0i ) ] );
-    CHECKGLERR;
+    mList.BindVAO();
 
     // set the texture
     if ( (mModeFlags & FLG_TEX) )
@@ -526,20 +569,7 @@ void ImmGL::FlushPrims()
 
     c_auto primType = (mModeFlags & FLG_LINES) ? GL_LINES : GL_TRIANGLES;
 
-    if NOT( mIdx.empty() )
-    {
-        glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, mVAE );
-        updateBuff( mIdx, GL_ELEMENT_ARRAY_BUFFER, mVAE, mCurVAESize, false );
-        // draw
-        glDrawElements( primType,  (GLsizei)mIdx.size(), GL_UNSIGNED_INT, nullptr );
-        glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
-    }
-    else
-    {
-        // draw
-        glDrawArrays( primType, 0, (GLsizei)n );
-    }
-    CHECKGLERR;
+    mList.DrawList( primType );
 
     // unbind everything
     //glUseProgram( 0 );
@@ -547,10 +577,7 @@ void ImmGL::FlushPrims()
     CHECKGLERR;
 
     // reset the buffers
-    mVtxPos.clear();
-    mVtxCol.clear();
-    mVtxTc0.clear();
-    mIdx.clear();
+    mList.ClearList();
 }
 
 //
