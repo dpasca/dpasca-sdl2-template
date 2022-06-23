@@ -13,6 +13,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <functional>
 #include <unordered_map>
 #include "MathBase.h"
 
@@ -117,7 +118,8 @@ public:
 
     void BindVAO() const;
 
-    void DrawList( IUInt primType );
+    void CompileList();
+    void DrawList( bool isTriangles );
 
     void ClearList()
     {
@@ -129,6 +131,8 @@ public:
 private:
     static size_t makeVAOIdx( size_t posi, size_t coli, size_t tc0i );
 };
+
+using ImmGLListPtr = std::unique_ptr<ImmGLList>;
 
 //==================================================================
 class ImmGL
@@ -161,7 +165,10 @@ public:
     ~ImmGL();
 
     void ResetStates();
-    void FlushPrims();
+    void FlushStdList();
+
+    ImmGLListPtr NewList( const std::function<void (ImmGLList &)> &fn );
+    void CallList( ImmGLList &lst, bool isTriangles=true );
 
     void SetBlendNone();
     void SetBlendAdd();
@@ -187,9 +194,6 @@ public:
     {
         DrawRectFill( IFloat2{rc[0],rc[1]}, IFloat2{rc[2],rc[3]}, col );
     }
-
-    ImmGLList &BeginMesh();
-    void EndMesh();
 
 private:
     std::array<IFloat3,4> makeRectVtxPos( const IFloat2 &pos, const IFloat2 &siz ) const
@@ -226,8 +230,8 @@ inline void ImmGL::DrawLine(
     switchModeFlags( FLG_LINES | FLG_COL );
     auto *pPos = mList.AllocPos( 2 );
     auto *pCol = mList.AllocCol( 2 );
-    pPos[0] = { p1[0], p1[1], 0 };
-    pPos[1] = { p2[0], p2[1], 0 };
+    pPos[0] = { p1[0], p1[1], p1[2] };
+    pPos[1] = { p2[0], p2[1], p2[2] };
     pCol[0] = col1;
     pCol[1] = col2;
 }

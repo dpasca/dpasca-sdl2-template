@@ -386,21 +386,42 @@ void ImmGLList::BindVAO() const
 }
 
 //==================================================================
-void ImmGLList::DrawList( IUInt primType )
+void ImmGLList::CompileList()
 {
+    if ( mVtxPos.empty() )
+        return;
+
+    // update the vertex buffers
+    UpdateBuffers();
+
     if NOT( mIdx.empty() )
     {
         glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, mVAE );
         updateBuff( mIdx, GL_ELEMENT_ARRAY_BUFFER, mVAE, mCurVAESize, false );
-        // draw
+        glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+        CHECKGLERR;
+    }
+}
+
+//==================================================================
+void ImmGLList::DrawList( bool isTriangles )
+{
+    c_auto primType = isTriangles ? GL_TRIANGLES : GL_LINES;
+
+    BindVAO();
+
+    if NOT( mIdx.empty() )
+    {
+        glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, mVAE );
         glDrawElements( primType,  (GLsizei)mIdx.size(), GL_UNSIGNED_INT, nullptr );
         glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
     }
     else
     {
-        // draw
         glDrawArrays( primType, 0, (GLsizei)mVtxPos.size() );
     }
+
+    glBindVertexArray( 0 );
     CHECKGLERR;
 }
 
@@ -426,7 +447,7 @@ void ImmGL::SetBlendNone()
         return;
 
     mCurBlendMode = BM_NONE;
-    FlushPrims();
+    FlushStdList();
 
     glDisable( GL_BLEND );
 }
@@ -438,7 +459,7 @@ void ImmGL::SetBlendAdd()
         return;
 
     mCurBlendMode = BM_ADD;
-    FlushPrims();
+    FlushStdList();
 
     glEnable( GL_BLEND );
     glBlendFunc( GL_SRC_ALPHA, GL_ONE );
@@ -451,7 +472,7 @@ void ImmGL::SetBlendAlpha()
         return;
 
     mCurBlendMode = BM_ALPHA;
-    FlushPrims();
+    FlushStdList();
 
     glEnable( GL_BLEND );
     glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
@@ -463,7 +484,7 @@ void ImmGL::SetTexture( IUInt texID )
     if ( mCurTexID == texID )
         return;
 
-    FlushPrims();
+    FlushStdList();
     mCurTexID = texID;
 }
 
@@ -473,24 +494,17 @@ void ImmGL::SetMtxPS( const IMat4 &m )
     if ( mCurMtxPS == m )
         return;
 
-    FlushPrims();
+    FlushStdList();
     mCurMtxPS = m;
 }
 
 //==================================================================
-ImmGLList &ImmGL::BeginMesh()
+ImmGLListPtr ImmGL::NewList( const std::function<void (ImmGLList &)> &fn )
 {
-    FlushPrims();
-    return mList;
-}
-
-void ImmGL::EndMesh()
-{
-    mModeFlags = 0
-        | (!mList.mVtxCol.empty() ? FLG_COL : 0)
-        | (!mList.mVtxTc0.empty() ? FLG_TEX : 0);
-
-    FlushPrims();
+    auto oList = std::make_unique<ImmGLList>();
+    fn( *oList );
+    oList->CompileList();
+    return oList;
 }
 
 //==================================================================
@@ -499,7 +513,7 @@ void ImmGL::switchModeFlags( IUInt flags )
     if ( mModeFlags == flags )
         return;
 
-    FlushPrims();
+    FlushStdList();
     mModeFlags = flags;
 }
 
@@ -531,21 +545,26 @@ void ImmGL::ResetStates()
 }
 
 //==================================================================
-void ImmGL::FlushPrims()
+void ImmGL::FlushStdList()
 {
-    if ( mList.mVtxPos.empty() )
+    mList.CompileList();
+
+    CallList( mList, !(mModeFlags & FLG_LINES) );
+
+    mList.ClearList();
+}
+
+//==================================================================
+void ImmGL::CallList( ImmGLList &lst, bool isTriangles )
+{
+    if ( lst.mVtxPos.empty() )
         return;
 
-    FLUSHGLERR; // forgive and forget
-
-    // update the vertex buffers
-    mList.UpdateBuffers();
-
-    // bind the VAO
-    mList.BindVAO();
+    //c_auto hasCol = !mList.mVtxCol.empty();
+    c_auto hasTex = !mList.mVtxTc0.empty();
 
     // set the texture
-    if ( (mModeFlags & FLG_TEX) )
+    if ( hasTex )
     {
         glActiveTexture( GL_TEXTURE0 );
         glBindTexture( GL_TEXTURE_2D, mCurTexID );
@@ -557,7 +576,7 @@ void ImmGL::FlushPrims()
     CHECKGLERR;
 
     // set the program
-    auto *pProg = moShaProgs[(mModeFlags & FLG_TEX) ? 1 : 0].get();
+    auto *pProg = moShaProgs[hasTex ? 1 : 0].get();
     if ( mpCurShaProg != pProg )
     {
         mpCurShaProg = pProg;
@@ -568,17 +587,11 @@ void ImmGL::FlushPrims()
     pProg->SetUniform( "u_mtxPS", mCurMtxPS );
     CHECKGLERR;
 
-    c_auto primType = (mModeFlags & FLG_LINES) ? GL_LINES : GL_TRIANGLES;
-
-    mList.DrawList( primType );
+    lst.DrawList( isTriangles );
 
     // unbind everything
     //glUseProgram( 0 );
-    glBindVertexArray( 0 );
     CHECKGLERR;
-
-    // reset the buffers
-    mList.ClearList();
 }
 
 //

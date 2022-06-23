@@ -105,10 +105,11 @@ static auto makeRendCol = []( RBColType src )
 
 //==================================================================
 static void drawTerrain(
+        auto &immgl,
+        auto &oList,
         const auto &terr,
         const auto &terrVerts,
         const uint32_t cropWH[2],
-        auto &immgl,
         const Matrix44 &proj_obj )
 {
     c_auto siz = terr.GetSiz();
@@ -123,32 +124,36 @@ static void drawTerrain(
 
     c_auto oosiz = 1.f / siz;
 #ifdef MESH_MODE
-    auto &lst = immgl.BeginMesh();
-    // verts
-    {
-        auto *pPos = lst.AllocPos( terrVerts.size() );
-        auto *pCol = lst.AllocCol( terrVerts.size() );
-        for (size_t i=0; i < terrVerts.size(); ++i)
+    if NOT( oList )
+        oList = immgl.NewList( [&]( ImmGLList &lst )
         {
-            pPos[i] = terrVerts[i];
-            pCol[i] = makeRendCol( terr.mBakedCols[ i ] );
-        }
-    }
-    // indexes
-    for (size_t yi=yi1; yi < yi2; ++yi)
-    {
-        c_auto row0 = (yi+0) << terr.GetSizL2();
-        c_auto row1 = (yi+1) << terr.GetSizL2();
-        for (size_t xi=xi1; xi < xi2; ++xi)
-        {
-            c_auto i00 = (uint32_t)(row0 + xi+0);
-            c_auto i01 = (uint32_t)(row0 + xi+1);
-            c_auto i10 = (uint32_t)(row1 + xi+0);
-            c_auto i11 = (uint32_t)(row1 + xi+1);
-            ImmGL_MakeQuadOfTrigs( lst.AllocIdx( 6 ), i00, i01, i10, i11 );
-        }
-    }
-    immgl.EndMesh();
+            // verts
+            {
+                auto *pPos = lst.AllocPos( terrVerts.size() );
+                auto *pCol = lst.AllocCol( terrVerts.size() );
+                for (size_t i=0; i < terrVerts.size(); ++i)
+                {
+                    pPos[i] = terrVerts[i];
+                    pCol[i] = makeRendCol( terr.mBakedCols[ i ] );
+                }
+            }
+            // indexes
+            for (size_t yi=yi1; yi < yi2; ++yi)
+            {
+                c_auto row0 = (yi+0) << terr.GetSizL2();
+                c_auto row1 = (yi+1) << terr.GetSizL2();
+                for (size_t xi=xi1; xi < xi2; ++xi)
+                {
+                    c_auto i00 = (uint32_t)(row0 + xi+0);
+                    c_auto i01 = (uint32_t)(row0 + xi+1);
+                    c_auto i10 = (uint32_t)(row1 + xi+0);
+                    c_auto i11 = (uint32_t)(row1 + xi+1);
+                    ImmGL_MakeQuadOfTrigs( lst.AllocIdx( 6 ), i00, i01, i10, i11 );
+                }
+            }
+        });
+
+    immgl.CallList( *oList );
 #else
     for (size_t yi=yi1; yi < yi2; ++yi)
     {
@@ -172,7 +177,7 @@ static void drawTerrain(
 //==================================================================
 //=== Generation
 //==================================================================
-static void makeTerrFromParams( auto &terr, auto &terrVerts )
+static void makeTerrFromParams( ImmGLListPtr &oList, auto &terr, auto &terrVerts )
 {
     // allocate a new map
     terr = Terrain( _sPar.GEN_SIZL2 );
@@ -215,12 +220,17 @@ static void makeTerrFromParams( auto &terr, auto &terrVerts )
     TGEN_CalcBakedColors( terr, _sPar.LIGHT_DIFF_COL, _sPar.LIGHT_AMB_COL );
 
     //
+    oList = {};
     terrVerts = makeTerrVerts( terr, DISP_TERR_SCALE );
 }
 
 #ifdef ENABLE_IMGUI
 //==================================================================
-static void handleUI( size_t frameCnt, Terrain &terr, auto &terrVerts )
+static void handleUI(
+            size_t frameCnt,
+            auto &oList,
+            Terrain &terr,
+            auto &terrVerts )
 {
     //ImGui::Text( "Frame: %zu", frameCnt );
 
@@ -284,7 +294,7 @@ static void handleUI( size_t frameCnt, Terrain &terr, auto &terrVerts )
         rebuild |= moved;
 
         if ( moved )
-            _sForceDebugRendCnt = 60*4;
+            _sForceDebugRendCnt = 60*6;
 
         rebuild |= inputF3( "Light Col", _sPar.LIGHT_DIFF_COL, 0, 5 );
         rebuild |= inputF3( "Ambient Col", _sPar.LIGHT_AMB_COL, 0, 5 );
@@ -295,7 +305,7 @@ static void handleUI( size_t frameCnt, Terrain &terr, auto &terrVerts )
         _sPar.GEN_STASIZL2 = std::min( _sPar.GEN_STASIZL2, _sPar.GEN_SIZL2 );
         _sPar.GEN_ROUGH    = std::clamp( _sPar.GEN_ROUGH, 0.f, 1.f );
 
-        makeTerrFromParams( terr, terrVerts );
+        makeTerrFromParams( oList, terr, terrVerts );
     }
 
     if ( header( "Export", false ) )
@@ -320,10 +330,12 @@ inline void debugDraw( auto &immgl, const Matrix44 &proj_obj )
 {
     immgl.SetMtxPS( proj_obj );
 
-    immgl.DrawLine(
-            {0,0,0},
-            calcLightDir( _sPar.LIGHT_DIR_LAT_LONG ) * DISP_TERR_SCALE * 0.5f,
-            {0.f,1.f,0.f,0.3f} );
+    auto sca = DISP_TERR_SCALE * 0.5f;
+
+    c_auto dir = calcLightDir( _sPar.LIGHT_DIR_LAT_LONG );
+
+    immgl.DrawLine( {0,0,0}, dir * Float3(sca,sca,sca), {0.f,1.f,0.f,0.5f} );
+    immgl.DrawLine( {0,0,0}, dir * Float3(sca,  0,sca), {0.f,0.f,0.f,1.0f} );
 }
 
 //==================================================================
@@ -335,10 +347,11 @@ int main( int argc, char *argv[] )
                     );
 
     ImmGL immgl;
+    ImmGLListPtr oList;
 
     Terrain terr;
     std::vector<Float3> terrVerts;
-    makeTerrFromParams( terr, terrVerts );
+    makeTerrFromParams( oList, terr, terrVerts );
 
     // begin the main/rendering loop
     for (size_t frameCnt=0; ; ++frameCnt)
@@ -348,7 +361,7 @@ int main( int argc, char *argv[] )
             break;
 
 #ifdef ENABLE_IMGUI
-        app.DrawMainUIWin( [&]() { handleUI( frameCnt, terr, terrVerts ); } );
+        app.DrawMainUIWin( [&]() { handleUI( frameCnt, oList, terr, terrVerts ); } );
 #endif
         glViewport(0, 0, app.GetDispSize()[0], app.GetDispSize()[1]);
         glClearColor( 0, 0, 0, 0 );
@@ -391,7 +404,7 @@ int main( int argc, char *argv[] )
         c_auto proj_obj = proj_camera * cam_world * world_obj;
 
         // draw the terrain
-        drawTerrain( terr, terrVerts, _sPar.DISP_CROP_WH, immgl, proj_obj );
+        drawTerrain( immgl, oList, terr, terrVerts, _sPar.DISP_CROP_WH, proj_obj );
 
         //
         if ( _sForceDebugRendCnt )
@@ -400,7 +413,7 @@ int main( int argc, char *argv[] )
             debugDraw( immgl, proj_obj );
         }
 
-        immgl.FlushPrims();
+        immgl.FlushStdList();
 
         // end of the frame (will present)
         app.EndFrame();
