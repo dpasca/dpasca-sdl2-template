@@ -39,6 +39,7 @@ struct DemoParams
     Float2      DISP_CAM_PY_ANGS    = {20.f, 0.f};
     bool        DISP_ANIM_YAW       = true;
     uint32_t    DISP_CROP_WH[2]     = {0,0};
+    bool        DISP_SMOOTH         = true;
 
     float       GEN_MIN_H           = -0.15f;
     float       GEN_MAX_H           =  0.10f;
@@ -110,6 +111,7 @@ static void drawTerrain(
         const auto &terr,
         const auto &terrVerts,
         const uint32_t cropWH[2],
+        const bool smoothShade,
         const Matrix44 &proj_obj )
 {
     c_auto siz = terr.GetSiz();
@@ -127,28 +129,54 @@ static void drawTerrain(
     if NOT( oList )
         oList = immgl.NewList( [&]( ImmGLList &lst )
         {
-            // verts
+            if NOT( smoothShade )
             {
-                auto *pPos = lst.AllocPos( terrVerts.size() );
-                auto *pCol = lst.AllocCol( terrVerts.size() );
-                for (size_t i=0; i < terrVerts.size(); ++i)
+                for (size_t yi=yi1; yi < yi2; ++yi)
                 {
-                    pPos[i] = terrVerts[i];
-                    pCol[i] = makeRendCol( terr.mBakedCols[ i ] );
+                    c_auto row0 = (yi+0) << terr.GetSizL2();
+                    c_auto row1 = (yi+1) << terr.GetSizL2();
+                    for (size_t xi=xi1; xi < xi2; ++xi)
+                    {
+                        c_auto i00 = row0 + xi+0;
+                        c_auto i01 = row0 + xi+1;
+                        c_auto i10 = row1 + xi+0;
+                        c_auto i11 = row1 + xi+1;
+                        auto *pPos = lst.AllocPos( 6 );
+                        auto *pCol = lst.AllocCol( 6 );
+                        ImmGL_MakeQuadOfTrigs( pPos,
+                            terrVerts[ i00 ], terrVerts[ i01 ],
+                            terrVerts[ i10 ], terrVerts[ i11 ] );
+
+                        c_auto col = makeRendCol( terr.mBakedCols[ i00 ] );
+                        ImmGL_MakeQuadOfTrigs( pCol, col, col, col, col );
+                    }
                 }
             }
-            // indexes
-            for (size_t yi=yi1; yi < yi2; ++yi)
+            else
             {
-                c_auto row0 = (yi+0) << terr.GetSizL2();
-                c_auto row1 = (yi+1) << terr.GetSizL2();
-                for (size_t xi=xi1; xi < xi2; ++xi)
+                // verts
                 {
-                    c_auto i00 = (uint32_t)(row0 + xi+0);
-                    c_auto i01 = (uint32_t)(row0 + xi+1);
-                    c_auto i10 = (uint32_t)(row1 + xi+0);
-                    c_auto i11 = (uint32_t)(row1 + xi+1);
-                    ImmGL_MakeQuadOfTrigs( lst.AllocIdx( 6 ), i00, i01, i10, i11 );
+                    auto *pPos = lst.AllocPos( terrVerts.size() );
+                    auto *pCol = lst.AllocCol( terrVerts.size() );
+                    for (size_t i=0; i < terrVerts.size(); ++i)
+                    {
+                        pPos[i] = terrVerts[i];
+                        pCol[i] = makeRendCol( terr.mBakedCols[ i ] );
+                    }
+                }
+                // indexes
+                for (size_t yi=yi1; yi < yi2; ++yi)
+                {
+                    c_auto row0 = (yi+0) << terr.GetSizL2();
+                    c_auto row1 = (yi+1) << terr.GetSizL2();
+                    for (size_t xi=xi1; xi < xi2; ++xi)
+                    {
+                        c_auto i00 = (uint32_t)(row0 + xi+0);
+                        c_auto i01 = (uint32_t)(row0 + xi+1);
+                        c_auto i10 = (uint32_t)(row1 + xi+0);
+                        c_auto i11 = (uint32_t)(row1 + xi+1);
+                        ImmGL_MakeQuadOfTrigs( lst.AllocIdx( 6 ), i00, i01, i10, i11 );
+                    }
                 }
             }
         });
@@ -252,6 +280,7 @@ static void handleUI(
         ImGui::Checkbox( "Anim Yaw", &_sPar.DISP_ANIM_YAW );
 
         rebuild |= ImGui::InputScalarN( "Crop", ImGuiDataType_U32, _sPar.DISP_CROP_WH, 2 );
+        rebuild |= ImGui::Checkbox( "Smooth Shading", &_sPar.DISP_SMOOTH );
     }
 
     if ( header( "Generation", true ) )
@@ -404,7 +433,8 @@ int main( int argc, char *argv[] )
         c_auto proj_obj = proj_camera * cam_world * world_obj;
 
         // draw the terrain
-        drawTerrain( immgl, oList, terr, terrVerts, _sPar.DISP_CROP_WH, proj_obj );
+        drawTerrain(
+            immgl, oList, terr, terrVerts, _sPar.DISP_CROP_WH, _sPar.DISP_SMOOTH, proj_obj );
 
         //
         if ( _sForceDebugRendCnt )
