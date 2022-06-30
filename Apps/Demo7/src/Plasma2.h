@@ -45,9 +45,6 @@ public:
 
     bool IterateBlock();
     bool IterateRow();
-
-    // utility functions
-    void ScaleResults( float mi, float ma ) const;
 };
 
 #endif

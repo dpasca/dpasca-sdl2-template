@@ -241,6 +241,8 @@ static void handleUI(
                     defOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0);
     };
 
+    bool rebuild = false;
+
     if ( header( "Display", true ) )
     {
         ImGui::SliderFloat( "Camera FOV", &_sPar.DISP_CAM_FOV_DEG, 10.f, 120.f );
@@ -249,10 +251,8 @@ static void handleUI(
 
         ImGui::Checkbox( "Anim Yaw", &_sPar.DISP_ANIM_YAW );
 
-        ImGui::InputScalarN( "Crop", ImGuiDataType_U32, _sPar.DISP_CROP_WH, 2 );
+        rebuild |= ImGui::InputScalarN( "Crop", ImGuiDataType_U32, _sPar.DISP_CROP_WH, 2 );
     }
-
-    bool rebuild = false;
 
     if ( header( "Generation", true ) )
     {
