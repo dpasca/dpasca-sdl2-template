@@ -24,8 +24,6 @@
 #include "ImmGL.h"
 #include "MinimalSDLApp.h"
 
-#define MESH_MODE
-
 //==================================================================
 static constexpr float DISP_TERR_SCALE  = 10.f;
 
@@ -39,7 +37,7 @@ struct DemoParams
     Float2      DISP_CAM_PY_ANGS    = {20.f, 0.f};
     bool        DISP_ANIM_YAW       = true;
     uint32_t    DISP_CROP_WH[2]     = {0,0};
-    bool        DISP_SMOOTH         = true;
+    bool        DISP_SMOOTH         = false;
 
     float       GEN_MIN_H           = -0.15f;
     float       GEN_MAX_H           =  0.10f;
@@ -105,16 +103,14 @@ static auto makeRendCol = []( RBColType src )
 };
 
 //==================================================================
-static void drawTerrain(
+static void makeTerrGeometry(
         auto &immgl,
         auto &oList,
         const auto &terr,
-        const auto &terrVerts,
         const uint32_t cropWH[2],
-        const bool smoothShade,
-        const Matrix44 &proj_obj )
+        const bool smoothShade )
 {
-    c_auto siz = terr.GetSiz();
+    c_auto terrVerts = makeTerrVerts( terr, DISP_TERR_SCALE );
 
     c_auto cropRC = TERR_MakeCropRC( terr.GetSiz(), cropWH );
     c_auto xi1 = cropRC[0];
@@ -122,90 +118,65 @@ static void drawTerrain(
     c_auto xi2 = cropRC[2] - 1;
     c_auto yi2 = cropRC[3] - 1;
 
-    immgl.SetMtxPS( proj_obj );
-
-    c_auto oosiz = 1.f / siz;
-#ifdef MESH_MODE
-    if NOT( oList )
-        oList = immgl.NewList( [&]( ImmGLList &lst )
-        {
-            if NOT( smoothShade )
-            {
-                for (size_t yi=yi1; yi < yi2; ++yi)
-                {
-                    c_auto row0 = (yi+0) << terr.GetSizL2();
-                    c_auto row1 = (yi+1) << terr.GetSizL2();
-                    for (size_t xi=xi1; xi < xi2; ++xi)
-                    {
-                        c_auto i00 = row0 + xi+0;
-                        c_auto i01 = row0 + xi+1;
-                        c_auto i10 = row1 + xi+0;
-                        c_auto i11 = row1 + xi+1;
-                        auto *pPos = lst.AllocPos( 6 );
-                        auto *pCol = lst.AllocCol( 6 );
-                        ImmGL_MakeQuadOfTrigs( pPos,
-                            terrVerts[ i00 ], terrVerts[ i01 ],
-                            terrVerts[ i10 ], terrVerts[ i11 ] );
-
-                        c_auto col = makeRendCol( terr.mBakedCols[ i00 ] );
-                        ImmGL_MakeQuadOfTrigs( pCol, col, col, col, col );
-                    }
-                }
-            }
-            else
-            {
-                // verts
-                {
-                    auto *pPos = lst.AllocPos( terrVerts.size() );
-                    auto *pCol = lst.AllocCol( terrVerts.size() );
-                    for (size_t i=0; i < terrVerts.size(); ++i)
-                    {
-                        pPos[i] = terrVerts[i];
-                        pCol[i] = makeRendCol( terr.mBakedCols[ i ] );
-                    }
-                }
-                // indexes
-                for (size_t yi=yi1; yi < yi2; ++yi)
-                {
-                    c_auto row0 = (yi+0) << terr.GetSizL2();
-                    c_auto row1 = (yi+1) << terr.GetSizL2();
-                    for (size_t xi=xi1; xi < xi2; ++xi)
-                    {
-                        c_auto i00 = (uint32_t)(row0 + xi+0);
-                        c_auto i01 = (uint32_t)(row0 + xi+1);
-                        c_auto i10 = (uint32_t)(row1 + xi+0);
-                        c_auto i11 = (uint32_t)(row1 + xi+1);
-                        ImmGL_MakeQuadOfTrigs( lst.AllocIdx( 6 ), i00, i01, i10, i11 );
-                    }
-                }
-            }
-        });
-
-    immgl.CallList( *oList );
-#else
-    for (size_t yi=yi1; yi < yi2; ++yi)
+    oList = immgl.NewList( [&]( ImmGLList &lst )
     {
-        c_auto row0 = (yi+0) << terr.GetSizL2();
-        c_auto row1 = (yi+1) << terr.GetSizL2();
-        for (size_t xi=xi1; xi < xi2; ++xi)
+        if ( smoothShade )
         {
-            c_auto i00 = row0 + xi+0;
-            c_auto i01 = row0 + xi+1;
-            c_auto i10 = row1 + xi+0;
-            c_auto i11 = row1 + xi+1;
-            immgl.DrawQuad({
-                terrVerts[ i00 ], terrVerts[ i01 ],
-                terrVerts[ i10 ], terrVerts[ i11 ]},
-                makeRendCol( terr.mBakedCols[ i00 ] ) );
+            // verts
+            {
+                auto *pPos = lst.AllocPos( terrVerts.size() );
+                auto *pCol = lst.AllocCol( terrVerts.size() );
+                for (size_t i=0; i < terrVerts.size(); ++i)
+                {
+                    pPos[i] = terrVerts[i];
+                    pCol[i] = makeRendCol( terr.mBakedCols[ i ] );
+                }
+            }
+            // indexes
+            for (size_t yi=yi1; yi < yi2; ++yi)
+            {
+                c_auto row0 = (yi+0) << terr.GetSizL2();
+                c_auto row1 = (yi+1) << terr.GetSizL2();
+                for (size_t xi=xi1; xi < xi2; ++xi)
+                {
+                    c_auto i00 = (uint32_t)(row0 + xi+0);
+                    c_auto i01 = (uint32_t)(row0 + xi+1);
+                    c_auto i10 = (uint32_t)(row1 + xi+0);
+                    c_auto i11 = (uint32_t)(row1 + xi+1);
+                    ImmGL_MakeQuadOfTrigs( lst.AllocIdx( 6 ), i00, i01, i10, i11 );
+                }
+            }
         }
-    }
-#endif
+        else
+        {
+            for (size_t yi=yi1; yi < yi2; ++yi)
+            {
+                c_auto row0 = (yi+0) << terr.GetSizL2();
+                c_auto row1 = (yi+1) << terr.GetSizL2();
+                for (size_t xi=xi1; xi < xi2; ++xi)
+                {
+                    c_auto i00 = row0 + xi+0;
+                    c_auto i01 = row0 + xi+1;
+                    c_auto i10 = row1 + xi+0;
+                    c_auto i11 = row1 + xi+1;
+                    auto *pPos = lst.AllocPos( 6 );
+                    auto *pCol = lst.AllocCol( 6 );
+                    ImmGL_MakeQuadOfTrigs( pPos,
+                        terrVerts[ i00 ], terrVerts[ i01 ],
+                        terrVerts[ i10 ], terrVerts[ i11 ] );
+
+                    c_auto col = makeRendCol( terr.mBakedCols[ i00 ] );
+                    ImmGL_MakeQuadOfTrigs( pCol, col, col, col, col );
+                }
+            }
+        }
+    });
 }
 
 //==================================================================
 //=== Generation
 //==================================================================
-static void makeTerrFromParams( ImmGLListPtr &oList, auto &terr, auto &terrVerts )
+static void makeTerrFromParams( auto &immgl, ImmGLListPtr &oList, auto &terr )
 {
     // allocate a new map
     terr = Terrain( _sPar.GEN_SIZL2 );
@@ -249,16 +220,16 @@ static void makeTerrFromParams( ImmGLListPtr &oList, auto &terr, auto &terrVerts
 
     //
     oList = {};
-    terrVerts = makeTerrVerts( terr, DISP_TERR_SCALE );
+    makeTerrGeometry( immgl, oList, terr, _sPar.DISP_CROP_WH, _sPar.DISP_SMOOTH );
 }
 
 #ifdef ENABLE_IMGUI
 //==================================================================
 static void handleUI(
             size_t frameCnt,
+            auto &immgl,
             auto &oList,
-            Terrain &terr,
-            auto &terrVerts )
+            Terrain &terr )
 {
     //ImGui::Text( "Frame: %zu", frameCnt );
 
@@ -334,7 +305,7 @@ static void handleUI(
         _sPar.GEN_STASIZL2 = std::min( _sPar.GEN_STASIZL2, _sPar.GEN_SIZL2 );
         _sPar.GEN_ROUGH    = std::clamp( _sPar.GEN_ROUGH, 0.f, 1.f );
 
-        makeTerrFromParams( oList, terr, terrVerts );
+        makeTerrFromParams( immgl, oList, terr );
     }
 
     if ( header( "Export", false ) )
@@ -379,8 +350,7 @@ int main( int argc, char *argv[] )
     ImmGLListPtr oList;
 
     Terrain terr;
-    std::vector<Float3> terrVerts;
-    makeTerrFromParams( oList, terr, terrVerts );
+    makeTerrFromParams( immgl, oList, terr );
 
     // begin the main/rendering loop
     for (size_t frameCnt=0; ; ++frameCnt)
@@ -390,7 +360,7 @@ int main( int argc, char *argv[] )
             break;
 
 #ifdef ENABLE_IMGUI
-        app.DrawMainUIWin( [&]() { handleUI( frameCnt, oList, terr, terrVerts ); } );
+        app.DrawMainUIWin( [&]() { handleUI( frameCnt, immgl, oList, terr ); } );
 #endif
         glViewport(0, 0, app.GetDispSize()[0], app.GetDispSize()[1]);
         glClearColor( 0, 0, 0, 0 );
@@ -432,9 +402,9 @@ int main( int argc, char *argv[] )
         // obj -> proj matrix
         c_auto proj_obj = proj_camera * cam_world * world_obj;
 
-        // draw the terrain
-        drawTerrain(
-            immgl, oList, terr, terrVerts, _sPar.DISP_CROP_WH, _sPar.DISP_SMOOTH, proj_obj );
+        // draw the terrain by calling the display list
+        immgl.SetMtxPS( proj_obj );
+        immgl.CallList( *oList );
 
         //
         if ( _sForceDebugRendCnt )
