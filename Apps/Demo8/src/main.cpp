@@ -14,6 +14,8 @@
 
 static const int COLMAP_W = 32;
 static const int COLMAP_H = 32;
+// coefficient to give the map a perspetive look (1.0 = no perspective)
+static const double DRAWMAP_PERSP_TWEAK = 0.7;
 
 //==================================================================
 static std::vector<uint8_t> makeColMap( int mapW, int mapH )
@@ -70,8 +72,10 @@ static void drawMap(
     {
         // v -> top,bottom -> 0..1
         const double v = (double)destY / destH;
+        // add perspective distorsion to the sampling
+        const double v_persp = pow( v, DRAWMAP_PERSP_TWEAK );
         // srcY -> top,bottom -> 0..srcH
-        const int srcY = (int)std::min( v * srcH, (double)srcH - 1 );
+        const int srcY = (int)std::min( v_persp * srcH, (double)srcH - 1 );
 
         // width of this row... interpolated from destW_top to destW_bot
         const auto destRowW = (int)Lerp( (double)destW_top, (double)destW_bot, v );
@@ -129,7 +133,7 @@ int main( int argc, char *argv[] )
             COLMAP_H, // map height
             W / 2,    // destination draw for X (middle of screen)
             H / 2,    // destination draw for Y (somewhere below the top)
-            W / 3,    // destination width at top
+            W / 4,    // destination width at top
             W,        // destination width at bottom
             250       // destination height
         );
