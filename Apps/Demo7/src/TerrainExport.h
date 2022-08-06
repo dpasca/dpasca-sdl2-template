@@ -31,11 +31,12 @@ static std::string SSPrintFS( const char *pFmt, ... )
 static void TerrainExport(
         const Terrain &terr,
         const std::string &pathFName,
+        const std::string &headStr,
         const int quantMaxH,
         const int quantShade,
         const uint32_t cropWH[2] )
 {
-    std::string str;
+    std::string str { headStr + "\n" };
 
     c_auto cropRC = TERR_MakeCropRC( terr.GetSiz(), cropWH );
     c_auto x1 = cropRC[0];

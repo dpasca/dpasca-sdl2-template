@@ -315,12 +315,28 @@ static void handleUI(
         ImGui::InputInt( "Shade Levels", &_sPar.EXP_QUANT_SHADE );
 
         if ( ImGui::Button( "Export" ) )
+        {
+            std::string headStr;
+            auto addField = [&]( const std::string &name, c_auto &val )
+            {
+                headStr += "// " + name + " = " + std::to_string(val) + "\n";
+            };
+            addField( "Gen:: Max Height",     _sPar.GEN_MIN_H      );
+            addField( "Gen:: Min Height",     _sPar.GEN_MAX_H      );
+            addField( "Gen:: Size Log2",      _sPar.GEN_SIZL2      );
+            addField( "Gen:: Init Size Log2", _sPar.GEN_STASIZL2   );
+            addField( "Gen:: Seed",           _sPar.GEN_SEED       );
+            addField( "Gen:: Roughness",      _sPar.GEN_ROUGH      );
+            addField( "Gen:: Wrap Edges",     _sPar.GEN_WRAP_EDGES );
+
             TerrainExport(
                     terr,
                     _sPar.EXP_PATHFNAME,
+                    headStr,
                     _sPar.EXP_QUANT_HEIGHT,
                     _sPar.EXP_QUANT_SHADE,
                     _sPar.DISP_CROP_WH );
+        }
     }
 }
 #endif
