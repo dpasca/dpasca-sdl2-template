@@ -63,7 +63,7 @@ static float _gsCosIntpl2Data[1024];
 
 static void CosIntpl2Setup( size_t siz )
 {
-    assert( siz <= _countof(_gsCosIntpl2Data) );
+    assert( siz <= std::size(_gsCosIntpl2Data) );
     c_auto angStep = FM_PI / siz;
     for (size_t i=0; i < siz; ++i)
     {
