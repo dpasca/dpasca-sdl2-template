@@ -74,7 +74,7 @@ static const char *getErrStr( GLenum err )
     default:
         {
             static char buff[128] {};
-            sprintf( buff, "#x%04x", err );
+            snprintf( buff, sizeof(buff), "#x%04x", err );
             return buff;
         }
     }
@@ -91,9 +91,9 @@ static bool CheckGLErr( const char *pFileName, int line )
         const char *pErrStr = getErrStr( err );
 
         if ( pErrStr )
-            printf( "GL error: %s at %s : %i", pErrStr, pFileName, line );
+            printf( "GL error: %s at %s : %i\n", pErrStr, pFileName, line );
         else
-            printf( "Unknown error: %d 0x%x at %s : %i", err, err, pFileName, line );
+            printf( "Unknown error: %d 0x%x at %s : %i\n", err, err, pFileName, line );
 
 		err = glGetError();
 	}
@@ -223,10 +223,12 @@ uniform sampler2D s_tex;
     c_auto shaderFrg = makeShader( GL_FRAGMENT_SHADER, frgSource );
 
     mProgramID = glCreateProgram();
+    CHECKGLERR;
 
     glAttachShader( mProgramID, shaderVtx );
     glAttachShader( mProgramID, shaderFrg );
     glLinkProgram( mProgramID );
+    CHECKGLERR;
 
     check_shader_compilation( mProgramID, true );
 
@@ -235,6 +237,7 @@ uniform sampler2D s_tex;
     glDetachShader( mProgramID, shaderFrg );
     glDeleteShader( shaderVtx );
     glDeleteShader( shaderFrg );
+    CHECKGLERR;
 }
 
 //==================================================================
@@ -257,22 +260,27 @@ IUInt ShaderProg::getLoc( const char *pName )
 void ShaderProg::SetUniform( const char *pName, float v )
 {
     glUniform1f( getLoc( pName ), v );
+    CHECKGLERR;
 }
 void ShaderProg::SetUniform( const char *pName, int v )
 {
     glUniform1i( getLoc( pName ), v );
+    CHECKGLERR;
 }
 void ShaderProg::SetUniform( const char *pName, const IMat4 &m )
 {
     glUniformMatrix4fv( getLoc( pName ), 1, false, (const float *)&m );
+    CHECKGLERR;
 }
 void ShaderProg::SetUniform( const char *pName, const IFloat3 &v )
 {
     glUniform3fv( getLoc( pName ), 1, (const float *)&v[0] );
+    CHECKGLERR;
 }
 void ShaderProg::SetUniform( const char *pName, const IFloat4 &v )
 {
     glUniform4fv( getLoc( pName ), 1, (const float *)&v[0] );
+    CHECKGLERR;
 }
 
 //==================================================================
@@ -302,6 +310,7 @@ inline auto updateBuff = []( auto &vec, c_auto type, c_auto &buff, auto &curSiz,
         CHECKGLERR;
     }
     glBufferSubData( type, 0, newSize, vec.data() );
+    CHECKGLERR;
     if ( bind )
     {
         glBindBuffer( type, 0 );
@@ -450,6 +459,7 @@ void ImmGL::SetBlendNone()
     FlushStdList();
 
     glDisable( GL_BLEND );
+    CHECKGLERR;
 }
 
 //==================================================================
@@ -463,6 +473,7 @@ void ImmGL::SetBlendAdd()
 
     glEnable( GL_BLEND );
     glBlendFunc( GL_SRC_ALPHA, GL_ONE );
+    CHECKGLERR;
 }
 
 //==================================================================
@@ -476,6 +487,7 @@ void ImmGL::SetBlendAlpha()
 
     glEnable( GL_BLEND );
     glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+    CHECKGLERR;
 }
 
 //==================================================================
@@ -520,28 +532,28 @@ void ImmGL::switchModeFlags( IUInt flags )
 //==================================================================
 void ImmGL::ResetStates()
 {
-    glDisableClientState( GL_VERTEX_ARRAY );
-    glDisableClientState( GL_COLOR_ARRAY );
-    glDisableClientState( GL_TEXTURE_COORD_ARRAY );
-
     mCurBlendMode = BM_NONE;
     glDisable( GL_BLEND );
+    CHECKGLERR;
 
     mModeFlags = 0;
 
-    glDisable( GL_TEXTURE_2D );
     mCurTexID = (IUInt)0;
     glBindTexture( GL_TEXTURE_2D, mCurTexID );
+    CHECKGLERR;
 
     //
     glBindBuffer( GL_ARRAY_BUFFER, 0 );
+    CHECKGLERR;
 
     //
     mpCurShaProg = nullptr;
     glUseProgram( 0 );
+    CHECKGLERR;
 
     //
     glBindVertexArray( 0 );
+    CHECKGLERR;
 }
 
 //==================================================================
@@ -563,6 +575,7 @@ void ImmGL::CallList( ImmGLList &lst, bool isTriangles )
     //c_auto hasCol = !mList.mVtxCol.empty();
     c_auto hasTex = !mList.mVtxTc0.empty();
 
+    CHECKGLERR;
     // set the texture
     if ( hasTex )
     {
