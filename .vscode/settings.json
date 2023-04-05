@@ -1,0 +1,3 @@
+{
+    "cmake.buildDirectory": "${workspaceFolder}/_build/vscode_${env.OS}"
+}
