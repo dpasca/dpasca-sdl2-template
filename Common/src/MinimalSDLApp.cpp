@@ -105,6 +105,79 @@ static std::string getFNameStem( const char *pPathFName )
 }
 
 //==================================================================
+#ifdef ENABLE_OPENGL
+static void setupOpenGLErrHandler()
+{
+    // setup OpenGL error handler
+    auto glErrHandler = [](
+            GLenum source,
+            GLenum type,
+            GLuint id,
+            GLenum severity,
+            GLsizei length,
+            const GLchar *message,
+            const void *userParam )
+    {
+        if ( severity == GL_DEBUG_SEVERITY_NOTIFICATION )
+            return;
+
+        const char *pSource = "unknown";
+        switch ( source )
+        {
+        case GL_DEBUG_SOURCE_API:             pSource = "API"; break;
+        case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   pSource = "window system"; break;
+        case GL_DEBUG_SOURCE_SHADER_COMPILER: pSource = "shader compiler"; break;
+        case GL_DEBUG_SOURCE_THIRD_PARTY:     pSource = "third party"; break;
+        case GL_DEBUG_SOURCE_APPLICATION:     pSource = "application"; break;
+        case GL_DEBUG_SOURCE_OTHER:           pSource = "other"; break;
+        }
+
+        const char *pType = "unknown";
+        switch ( type )
+        {
+        case GL_DEBUG_TYPE_ERROR:               pType = "error"; break;
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: pType = "deprecated behavior"; break;
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  pType = "undefined behavior"; break;
+        case GL_DEBUG_TYPE_PORTABILITY:         pType = "portability"; break;
+        case GL_DEBUG_TYPE_PERFORMANCE:         pType = "performance"; break;
+        case GL_DEBUG_TYPE_MARKER:              pType = "marker"; break;
+        case GL_DEBUG_TYPE_PUSH_GROUP:          pType = "push group"; break;
+        case GL_DEBUG_TYPE_POP_GROUP:           pType = "pop group"; break;
+        case GL_DEBUG_TYPE_OTHER:               pType = "other"; break;
+        }
+
+        const char *pSeverity = "unknown";
+        switch ( severity )
+        {
+        case GL_DEBUG_SEVERITY_HIGH:         pSeverity = "high"; break;
+        case GL_DEBUG_SEVERITY_MEDIUM:       pSeverity = "medium"; break;
+        case GL_DEBUG_SEVERITY_LOW:          pSeverity = "low"; break;
+        case GL_DEBUG_SEVERITY_NOTIFICATION: pSeverity = "notification"; break;
+        }
+
+        SDL_LogError( SDL_LOG_CATEGORY_APPLICATION, "OpenGL error: %s, %s, %s, %s\n", pSource, pType, pSeverity, message );
+    };
+
+    if (GLEW_KHR_debug)
+    {
+        glEnable( GL_DEBUG_OUTPUT );
+        glDebugMessageCallback( glErrHandler, nullptr );
+    }
+    else
+    if (GLEW_ARB_debug_output)
+    {
+        glEnable( GL_DEBUG_OUTPUT );
+        glDebugMessageCallbackARB( glErrHandler, nullptr );
+    }
+    else
+    {
+        SDL_LogWarn( SDL_LOG_CATEGORY_APPLICATION, "No OpenGL debug output available\n" );
+    }
+}
+
+#endif
+
+//==================================================================
 MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
 {
     ctor_parseArgs( argc, argv );
@@ -230,6 +303,10 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
         ImGui_ImplSDL2_InitForSDLRenderer( mpWindow, mpRenderer );
         ImGui_ImplSDLRenderer_Init( mpRenderer );
     }
+#endif
+
+#ifdef ENABLE_OPENGL
+    setupOpenGLErrHandler();
 #endif
 }
 
