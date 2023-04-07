@@ -9,6 +9,7 @@
 #include <string>
 #include <chrono>
 #include <filesystem>
+#include <fmt/format.h>
 #include "IncludeGL.h"
 #ifdef ENABLE_IMGUI
 # define IMGUI_DEFINE_MATH_OPERATORS
@@ -178,6 +179,24 @@ static void setupOpenGLErrHandler()
 #endif
 
 //==================================================================
+inline auto exitErrSDL = []( const char *pMsg )
+{
+    SDL_LogError( SDL_LOG_CATEGORY_APPLICATION, "%s: %s\n", pMsg, SDL_GetError() );
+    exit( 1 );
+};
+
+inline auto exitErr = [](const std::string& str)
+{
+    SDL_LogError( SDL_LOG_CATEGORY_APPLICATION, "%s", str.c_str() );
+    exit( 1 );
+};
+
+inline void logInfo(const std::string& str)
+{
+    SDL_LogInfo( SDL_LOG_CATEGORY_APPLICATION, "%s", str.c_str() );
+}
+
+//==================================================================
 MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
 {
     ctor_parseArgs( argc, argv );
@@ -187,18 +206,6 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
 
     // enable logging
     SDL_LogSetPriority( SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO );
-
-    //
-    auto exitErrSDL = [&]( const char *pMsg )
-    {
-        SDL_LogError( SDL_LOG_CATEGORY_APPLICATION, "%s: %s\n", pMsg, SDL_GetError() );
-        exit( 1 );
-    };
-    auto exitErr = [&]( const char *pMsg )
-    {
-        SDL_LogError( SDL_LOG_CATEGORY_ERROR, "%s\n", pMsg );
-        exit( 1 );
-    };
 
     // initialize SDL
     if ( SDL_Init(SDL_INIT_VIDEO) )
@@ -244,6 +251,10 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
 #ifdef ENABLE_OPENGL
     if ( flags & FLAG_OPENGL )
     {
+        // verify that the window has the OpenGL flag
+        if (!(SDL_GetWindowFlags(mpWindow) & SDL_WINDOW_OPENGL))
+            exitErr( "The window was created without OpenGL flag" );
+
         mpSDLGLContext = SDL_GL_CreateContext( mpWindow );
 
         if ( GLEW_OK != glewInit() )
@@ -253,6 +264,8 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
 
         glGetIntegerv( GL_MAJOR_VERSION, &mUsingGLVersion_Major );
         glGetIntegerv( GL_MINOR_VERSION, &mUsingGLVersion_Minor );
+
+        logInfo(fmt::format("Using OpenGL {}.{}", mUsingGLVersion_Major, mUsingGLVersion_Minor));
     }
 #endif
 
@@ -420,6 +433,10 @@ void MinimalSDLApp::EndFrame()
 #endif
             SDL_RenderPresent( mpRenderer );
     }
+
+    // check if there is any error from SDL, and just quit if there is
+    if (const char *pErr = SDL_GetError(); pErr[0])
+        exitErr(fmt::format("SDL error: {}", pErr));
 
     mFrameCnt += 1;
 }

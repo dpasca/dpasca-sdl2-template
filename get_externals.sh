@@ -6,11 +6,12 @@ EXTDIR="${BASHSCRIPTDIR}/_externals"
 GLMVER="efec5db081e3aad807d0731e172ac597f6a39447"
 SDLVER="release-2.26.4"
 IMGUIVER="4789c7e485244aa6489f89dbb03b19d4ad0ea1ec"
+FMTVER="7f46cb75b8c0b1e69edeaf728cddbd0cb72736ba"
 
 checkout_revision(){
     REMOTE_REPO=$1
-    REVISION=$2
-    REPO=$(basename "${REMOTE_REPO}")
+    REPO=$2
+    REVISION=$3
     if [[ -d "${REPO}" ]] ; then
         cd "${REPO}" || exit
         git checkout -
@@ -25,8 +26,9 @@ checkout_revision(){
 
 mkdir -p "${EXTDIR}" || exit 1
 pushd "${EXTDIR}" || exit 1
-checkout_revision "https://github.com/g-truc/glm"       "${GLMVER}"
-checkout_revision "https://github.com/libsdl-org/SDL"   "${SDLVER}"
-checkout_revision "https://github.com/ocornut/imgui"    "${IMGUIVER}"
+checkout_revision "https://github.com/g-truc/glm"     "glm"   "${GLMVER}"
+checkout_revision "https://github.com/libsdl-org/SDL" "SDL"   "${SDLVER}"
+checkout_revision "https://github.com/ocornut/imgui"  "imgui" "${IMGUIVER}"
+checkout_revision "https://github.com/fmtlib/fmt.git" "fmt"   "${FMTVER}"
 popd
 

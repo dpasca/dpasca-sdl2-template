@@ -20,4 +20,7 @@ target_link_libraries( ${PROJECT_NAME}
     ${SDL_LIBRARIES_EXTRA}
     ${GFX_LINK_LIBS}
     ${PLATFORM_LINK_LIBS}
-    ${IMGUI_LIBRARIES} )
+    ${IMGUI_LIBRARIES}
+    fmt::fmt
+    )
+

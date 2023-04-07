@@ -6,7 +6,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake_modules")
 # specify to use Unity Builds
 set(BUILD_UNITY FALSE)
 
-set(ENABLE_IMGUI TRUE)
+set(ENABLE_IMGUI FALSE)
 
 set(ENABLE_OPENGL TRUE)
 
@@ -176,6 +176,10 @@ if (ENABLE_IMGUI)
 
     set(IMGUI_LIBRARIES imgui)
 endif()
+
+# externals: fmt
+include_directories( _externals/fmt/include )
+add_subdirectory( _externals/fmt )
 
 #==================================================================
 # Specify the destination for the build products
