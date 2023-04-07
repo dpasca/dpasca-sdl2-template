@@ -255,6 +255,9 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
         if (!(SDL_GetWindowFlags(mpWindow) & SDL_WINDOW_OPENGL))
             exitErr( "The window was created without OpenGL flag" );
 
+# ifdef DEBUG
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+# endif
         mpSDLGLContext = SDL_GL_CreateContext( mpWindow );
 
         if ( GLEW_OK != glewInit() )
@@ -281,8 +284,31 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
     }
     else
     {
+        int driverIdx = -1;
+#ifdef ENABLE_OPENGL
+        if ( flags & FLAG_OPENGL )
+        {
+            // find the OpenGL driver index
+            const int numDrivers = SDL_GetNumRenderDrivers();
+            for (int i = 0; i < numDrivers; ++i)
+            {
+                SDL_RendererInfo rendererInfo;
+                if (SDL_GetRenderDriverInfo(i, &rendererInfo) == 0)
+                {
+                    if (!strcmp(rendererInfo.name, "opengl"))
+                    {
+                        driverIdx = i;
+                        break;
+                    }
+                }
+            }
+            
+            if (driverIdx == -1)
+                exitErr("OpenGL render driver not found");
+        }
+#endif
         // create the renderer
-        mpRenderer = SDL_CreateRenderer( mpWindow, -1, 0
+        mpRenderer = SDL_CreateRenderer( mpWindow, driverIdx, 0
                         | SDL_RENDERER_ACCELERATED
                         | (mExitFrameN ? 0 : SDL_RENDERER_PRESENTVSYNC) );
     }
@@ -332,6 +358,11 @@ MinimalSDLApp::~MinimalSDLApp()
 //==================================================================
 bool MinimalSDLApp::BeginFrame()
 {
+#ifdef ENABLE_OPENGL
+    if ( mpSDLGLContext )
+        SDL_GL_MakeCurrent( mpWindow, mpSDLGLContext );
+#endif
+
     SDL_Event e;
     while ( SDL_PollEvent(&e) )
     {
@@ -421,6 +452,10 @@ void MinimalSDLApp::EndFrame()
 
         mLastFrameTimeS = curTimeS;
     }
+
+    // check if there is any error from SDL, and just quit if there is
+    if (const char *pErr = SDL_GetError(); pErr[0])
+        exitErr(fmt::format("SDL error: {}", pErr));
 
     if ( mUseSWRender )
         SDL_UpdateWindowSurface( mpWindow );

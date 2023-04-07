@@ -144,6 +144,7 @@ static void check_shader_compilation( GLuint oid, bool isLink )
 //==================================================================
 ShaderProg::ShaderProg( bool useTex )
 {
+    CHECKGLERR;
 static const IStr vtxSrouce = R"RAW(
 // input attributes
 layout (location = 0) in vec3 a_pos;
@@ -194,10 +195,19 @@ void main()
 }
 )RAW";
 
-    // header
-    IStr header = R"RAW(
-#version 330
-
+    IStr header;
+    
+    // set the glsl version based on the opengl version
+    {
+        int ma = 0;
+        int mi = 0;
+        glGetIntegerv(GL_MAJOR_VERSION, &ma);
+        glGetIntegerv(GL_MINOR_VERSION, &mi);
+        CHECKGLERR;
+        header += "#version " + std::to_string(ma) + std::to_string(mi) + "0\n";
+    }
+    
+    header += R"RAW(
 uniform mat4x4  u_mtxPS;
 uniform sampler2D s_tex;
 )RAW";
@@ -333,13 +343,16 @@ ImmGLList::ImmGLList()
             {
                 IUInt vao {};
                 glGenVertexArrays( 1, &vao );
+                CHECKGLERR;
                 glBindVertexArray( vao );
+                CHECKGLERR;
 
                 mVAOs[ makeVAOIdx( posi, coli, tc0i ) ] = vao;
 
                 if ( posi ) glEnableVertexAttribArray( 0 );
                 if ( coli ) glEnableVertexAttribArray( 1 );
                 if ( tc0i ) glEnableVertexAttribArray( 2 );
+                CHECKGLERR;
 
                 auto vap = [this]( GLuint idx, GLuint cnt )
                 {
@@ -350,8 +363,10 @@ ImmGLList::ImmGLList()
                 if ( posi ) vap( 0, 3 );
                 if ( coli ) vap( 1, 4 );
                 if ( tc0i ) vap( 2, 2 );
+                CHECKGLERR;
 
                 glBindVertexArray( 0 );
+                CHECKGLERR;
             }
         }
     }
@@ -359,6 +374,7 @@ ImmGLList::ImmGLList()
 
     // make the VAE
     glGenBuffers( 1, &mVAE );
+    CHECKGLERR;
 }
 
 //==================================================================
