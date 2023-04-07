@@ -1,6 +1,7 @@
 _build
 _bin
 _tmp
+_externals
 ctags.d/
 tags
 
