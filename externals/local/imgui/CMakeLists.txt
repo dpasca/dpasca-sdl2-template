@@ -12,7 +12,7 @@ file( GLOB SRCS_IMPL "${IMGUI_SRCDIR}/backends/*_sdl.*"
                      "${IMGUI_SRCDIR}/backends/*_sdlrenderer.*" )
 # OpenGL backend is optional
 if (ENABLE_OPENGL)
-    file( GLOB SRCS_IMPL_OGL "${IMGUI_SRCDIR}/backends/*_sdl.*"
+    file( GLOB SRCS_IMPL_OGL "${IMGUI_SRCDIR}/backends/*_sdl2.*"
                              "${IMGUI_SRCDIR}/backends/*_opengl3.*"
                              "${IMGUI_SRCDIR}/backends/*_opengl2.*" )
 endif()
