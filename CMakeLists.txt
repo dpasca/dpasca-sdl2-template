@@ -6,7 +6,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake_modules")
 # specify to use Unity Builds
 set(BUILD_UNITY FALSE)
 
-set(ENABLE_IMGUI TRUE)
+set(ENABLE_IMGUI FALSE)
 
 set(ENABLE_OPENGL TRUE)
 
