@@ -281,40 +281,21 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
 
         // create the renderer
         mpRenderer = SDL_CreateSoftwareRenderer( mpSurface );
+
+        if ( !mpRenderer )
+            exitErrSDL( "SDL_CreateSoftwareRenderer failed" );
     }
+    // create a hardware renderer, but only if we aren't using OpenGL
     else
+    if ( !(flags & FLAG_OPENGL) )
     {
-        int driverIdx = -1;
-#ifdef ENABLE_OPENGL
-        if ( flags & FLAG_OPENGL )
-        {
-            // find the OpenGL driver index
-            const int numDrivers = SDL_GetNumRenderDrivers();
-            for (int i = 0; i < numDrivers; ++i)
-            {
-                SDL_RendererInfo rendererInfo;
-                if (SDL_GetRenderDriverInfo(i, &rendererInfo) == 0)
-                {
-                    if (!strcmp(rendererInfo.name, "opengl"))
-                    {
-                        driverIdx = i;
-                        break;
-                    }
-                }
-            }
-            
-            if (driverIdx == -1)
-                exitErr("OpenGL render driver not found");
-        }
-#endif
-        // create the renderer
-        mpRenderer = SDL_CreateRenderer( mpWindow, driverIdx, 0
+        mpRenderer = SDL_CreateRenderer( mpWindow, -1, 0
                         | SDL_RENDERER_ACCELERATED
                         | (mExitFrameN ? 0 : SDL_RENDERER_PRESENTVSYNC) );
-    }
 
-    if ( !mpRenderer )
-        exitErrSDL( "SDL_CreateSoftwareRenderer failed" );
+        if ( !mpRenderer )
+            exitErrSDL( "SDL_CreateRenderer failed" );
+    }
 
 #ifdef ENABLE_IMGUI
     ImGui::CreateContext();
@@ -338,6 +319,7 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
     }
     else
 # endif
+    if ( mpRenderer )
     {
         ImGui_ImplSDL2_InitForSDLRenderer( mpWindow, mpRenderer );
         ImGui_ImplSDLRenderer_Init( mpRenderer );
@@ -466,6 +448,7 @@ void MinimalSDLApp::EndFrame()
             SDL_GL_SwapWindow( mpWindow );
         else
 #endif
+        if ( mpRenderer )
             SDL_RenderPresent( mpRenderer );
     }
 
@@ -481,9 +464,8 @@ std::array<int,2> MinimalSDLApp::GetDispSize() const
 {
     int w {};
     int h {};
-    if ( SDL_GetRendererOutputSize( mpRenderer, &w, &h ) )
-        return {0,0};
-
+    // get the window size
+    SDL_GetWindowSize( mpWindow, &w, &h );
     return {w, h};
 }
 
@@ -509,9 +491,8 @@ void MinimalSDLApp::SaveScreenshot( const std::string &pathFName )
 {
     const auto fmt = SDL_PIXELFORMAT_RGB888;
 
-    int w {};
-    int h {};
-    if ( SDL_GetRendererOutputSize( mpRenderer, &w, &h ) )
+    const auto [w, h] = GetDispSize();
+    if (!w || !h)
         return;
 
     auto *pTmpSurf = SDL_CreateRGBSurfaceWithFormat( 0, w, h, 24, fmt );
@@ -542,6 +523,7 @@ void MinimalSDLApp::SaveScreenshot( const std::string &pathFName )
     }
     else
 #endif
+    if ( mpRenderer )
     {
         SDL_RenderReadPixels( mpRenderer, nullptr, fmt, pTmpSurf->pixels, pTmpSurf->pitch );
     }
