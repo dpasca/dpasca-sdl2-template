@@ -1,3 +1,7 @@
 {
-    "cmake.buildDirectory": "${workspaceFolder}/_build/vscode_${env.OS}"
+    "cmake.buildDirectory": "${workspaceFolder}/_build/vscode_${env.OS}",
+
+    "cmake.configureSettings": {
+        "CMAKE_BUILD_TYPE": "Debug"
+    }
 }
