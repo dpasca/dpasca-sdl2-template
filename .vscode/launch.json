@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Debug Demo7",
+            "type": "cppdbg",
+            "request": "launch",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "windows": {
+                "program": "${workspaceFolder}/_bin/Debug/Demo7",
+                "MIMode": "gdb"
+            },
+            "osx": {
+                "program": "${workspaceFolder}/_bin/Demo7",
+                "MIMode": "lldb"
+            }
+        }
+    ]
+}
+
