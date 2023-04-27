@@ -212,13 +212,15 @@ endfunction()
 
 # apps
 include_directories( Common/src )
-add_subdirectory_if_exists( Common )
-add_subdirectory_if_exists( Apps/Demo1 )
-add_subdirectory_if_exists( Apps/Demo2 )
-add_subdirectory_if_exists( Apps/Demo3 )
-add_subdirectory_if_exists( Apps/Demo4 )
-add_subdirectory_if_exists( Apps/Demo5 )
-add_subdirectory_if_exists( Apps/Demo6 )
-add_subdirectory_if_exists( Apps/Demo7 )
-add_subdirectory_if_exists( Apps/Demo8 )
+add_subdirectory( Common )
+
+# add all subdirs of Apps that have a CMakeLists.txt
+file(GLOB APPS_SUBDIRS
+     RELATIVE ${CMAKE_SOURCE_DIR}/Apps
+     ${CMAKE_SOURCE_DIR}/Apps/*/CMakeLists.txt)
+
+foreach(subdir ${APPS_SUBDIRS})
+    string(REPLACE "/CMakeLists.txt" "" subdir_rel_path ${subdir})
+    add_subdirectory( Apps/${subdir_rel_path} )
+endforeach()
 
