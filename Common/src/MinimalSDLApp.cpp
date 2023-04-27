@@ -269,6 +269,8 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
         glGetIntegerv( GL_MINOR_VERSION, &mUsingGLVersion_Minor );
 
         logInfo(fmt::format("Using OpenGL {}.{}", mUsingGLVersion_Major, mUsingGLVersion_Minor));
+        
+        SDL_GL_SetSwapInterval( mExitFrameN ? 0 : 1 );
     }
 #endif
 
