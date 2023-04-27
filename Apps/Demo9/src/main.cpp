@@ -47,6 +47,8 @@ inline constexpr float DEG2RAD( float deg )
 static constexpr auto SLAB_DEPTH = 1.f; // meters
 static constexpr auto SLAB_WIDTH = 12.f; // meters
 static constexpr auto SLAB_MAX_N = 1000; // meters
+static constexpr auto SLAB_STA_IDX = 4;
+static constexpr auto SLAB_END_IDX = SLAB_MAX_N - 10;
 static constexpr auto SLAB_LANES_N = 4;
 
 // vehicle params
@@ -63,63 +65,6 @@ static constexpr auto VH_PROBE_RADIUS   = VH_LENGTH * 3;
 static constexpr auto NPC_SPAWN_N       = (size_t)150;
 static constexpr auto NPC_SPEED_MIN_MS  = 4.0f; // meters/second
 static constexpr auto NPC_SPEED_MAX_MS  = 8.0f; // meters/second
-
-#ifdef ENABLE_IMGUI
-//==================================================================
-static void handleUI(size_t frameCnt, auto &immgl)
-{
-    //ImGui::Text( "Frame: %zu", frameCnt );
-
-    auto header = []( const std::string &name, bool defOpen )
-    {
-        return ImGui::CollapsingHeader(
-                    (name + "##head").c_str(),
-                    defOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0);
-    };
-
-    bool rebuild = false;
-
-    if ( header( "Display", true ) )
-    {
-        ImGui::SliderFloat( "Camera FOV", &_sPar.DISP_CAM_FOV_DEG, 10.f, 120.f );
-        ImGui::SliderFloat( "Camera Dist", &_sPar.DISP_CAM_DIST, 0.f, DISP_CAM_FAR/10 );
-        ImGui::SliderFloat2( "Camera Pitch/Yaw", &_sPar.DISP_CAM_PY_ANGS[0], -180, 180 );
-        ImGui::NewLine();
-        ImGui::Checkbox("Debug Draw", &_sShowDebugDraw);
-    }
-}
-#endif
-
-//==================================================================
-static void drawRoad(
-        ImmGL& immgl,
-        float offZ,
-        size_t idxSta,
-        size_t idxEnd)
-{
-    // two levels of gray for asphalt, float values
-    static IColor4 baseCols[2] = {
-        { 0.4f, 0.4f, 0.4f, 1.f },
-        { 0.5f, 0.5f, 0.5f, 1.f },
-    };
-
-    for (size_t idx=idxSta; idx < idxEnd; ++idx)
-    {
-        const auto x0 = -SLAB_WIDTH * 0.5f;
-        const auto x1 =  SLAB_WIDTH * 0.5f;
-        const auto z0 = (float)(idx  ) * -SLAB_DEPTH;
-        const auto z1 = (float)(idx+1) * -SLAB_DEPTH;
-
-        const std::array<IFloat3,4> vpos = {
-            IFloat3{x0, 0.f, z0},
-            IFloat3{x1, 0.f, z0},
-            IFloat3{x0, 0.f, z1},
-            IFloat3{x1, 0.f, z1},
-        };
-
-        immgl.DrawQuad( vpos, baseCols[idx % std::size(baseCols)] );
-    }
-}
 
 //==================================================================
 static auto attenuateVal = [](auto val, auto dt, auto att)
@@ -405,6 +350,10 @@ class Simulation
 {
     std::vector<Vehicle> mVehicles;
 
+    double               mRunTimeS = 0;
+    bool                 mHasCollided = false;
+    bool                 mHasFinished = false;
+
 public:
     Simulation(uint32_t seed)
     {
@@ -445,6 +394,11 @@ public:
 
     void AnimateSim(float dt)
     {
+        if (mHasCollided || mHasFinished)
+            return;
+
+        mRunTimeS += dt;
+
         // animate the vehicles
         fillVehicleSensors(mVehicles[0], mVehicles, 0);
         for (auto& vh : mVehicles)
@@ -452,10 +406,155 @@ public:
             vh.ApplyInputs(dt);
             vh.AnimateVehicle(dt);
         }
+
+        // see if we reached the end
+        if (mVehicles[0].mPos[2] < (-SLAB_DEPTH * SLAB_END_IDX))
+            mHasFinished = true;
+
+        // check for collisions
+        const auto& ourVh = mVehicles[0];
+        const auto ourMinX = ourVh.mPos[0] - VH_WIDTH * 0.5f;
+        const auto ourMaxX = ourVh.mPos[0] + VH_WIDTH * 0.5f;
+        const auto ourMinZ = ourVh.mPos[2] - VH_LENGTH * 0.5f;
+        const auto ourMaxZ = ourVh.mPos[2] + VH_LENGTH * 0.5f;
+        for (size_t i=1; i < mVehicles.size(); ++i)
+        {
+            const auto& vh = mVehicles[i];
+            const auto minX = vh.mPos[0] - VH_WIDTH * 0.5f;
+            const auto maxX = vh.mPos[0] + VH_WIDTH * 0.5f;
+            const auto minZ = vh.mPos[2] - VH_LENGTH * 0.5f;
+            const auto maxZ = vh.mPos[2] + VH_LENGTH * 0.5f;
+
+            if (ourMinX < maxX && ourMaxX > minX &&
+                ourMinZ < maxZ && ourMaxZ > minZ)
+            {
+                mHasCollided = true;
+                break;
+            }
+        }
+    }
+
+    double GetRunTimeS() const { return mRunTimeS; }
+    bool HasCollided() const { return mHasCollided; }
+    bool HasFinished() const { return mHasFinished; }
+
+    double GetSimScore() const
+    {
+        const auto penaltySca = mHasCollided ? 0.5 : 1.0;
+        const auto winningSca = mHasFinished ? 1.5 : 1.0;
+
+        if (mRunTimeS <= 0)
+            return 0;
+
+        assert(mVehicles[0].mPos[2] <= 0);
+
+        return -mVehicles[0].mPos[2] * penaltySca * winningSca / mRunTimeS;
     }
 
     const auto& GetVehicles() const { return mVehicles; }
 };
+
+//==================================================================
+static void drawRoad(
+        ImmGL& immgl,
+        size_t idxSta,
+        size_t idxEnd)
+{
+    // two levels of gray for asphalt, float values
+    static IColor4 baseCols[2] = {
+        { 0.4f, 0.4f, 0.4f, 1.f },
+        { 0.5f, 0.5f, 0.5f, 1.f },
+    };
+    static IColor4 staCol = { 0.2f, 0.8f, 0.2f, 1.f };
+    static IColor4 endCol = { 0.8f, 0.2f, 0.2f, 1.f };
+
+    for (size_t idx=idxSta; idx < idxEnd; ++idx)
+    {
+        const auto x0 = -SLAB_WIDTH * 0.5f;
+        const auto x1 =  SLAB_WIDTH * 0.5f;
+        const auto z0 = (float)(idx  ) * -SLAB_DEPTH;
+        const auto z1 = (float)(idx+1) * -SLAB_DEPTH;
+
+        const std::array<IFloat3,4> vpos = {
+            IFloat3{x0, 0.f, z0},
+            IFloat3{x1, 0.f, z0},
+            IFloat3{x0, 0.f, z1},
+            IFloat3{x1, 0.f, z1},
+        };
+
+        const auto col =
+            (idx == SLAB_STA_IDX)
+                ? staCol
+                : (idx == SLAB_END_IDX)
+                    ? endCol
+                    : baseCols[idx % std::size(baseCols)];
+
+        immgl.DrawQuad(vpos, col);
+    }
+}
+
+#ifdef ENABLE_IMGUI
+//==================================================================
+static void handleUI(size_t frameCnt, Simulation& sim)
+{
+    auto header = []( const std::string &name, bool defOpen )
+    {
+        return ImGui::CollapsingHeader(
+                    (name + "##head").c_str(),
+                    defOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0);
+    };
+
+    bool rebuild = false;
+
+    if ( header( "Display", true ) )
+    {
+        ImGui::SliderFloat( "Camera FOV", &_sPar.DISP_CAM_FOV_DEG, 10.f, 120.f );
+        ImGui::SliderFloat( "Camera Dist", &_sPar.DISP_CAM_DIST, 0.f, DISP_CAM_FAR/10 );
+        ImGui::SliderFloat2( "Camera Pitch/Yaw", &_sPar.DISP_CAM_PY_ANGS[0], -180, 180 );
+        ImGui::NewLine();
+        ImGui::Checkbox("Debug Draw", &_sShowDebugDraw);
+    }
+
+    if (header("Simulation", true))
+    {
+        ImGui::BeginTable("##simParams", 2,
+                ImGuiTableFlags_RowBg
+                | ImGuiTableFlags_BordersInner
+                | ImGuiTableFlags_SizingStretchSame);
+        ImGui::TableSetupColumn("Name");
+        ImGui::TableSetupColumn("Value");
+        ImGui::TableHeadersRow();
+
+        auto nameAndValue = [](const char* name, const char* fmt, ...)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%s", name);
+            ImGui::TableSetColumnIndex(1);
+            char buf[256];
+            va_list args;
+            va_start(args, fmt);
+            vsnprintf(buf, sizeof(buf), fmt, args);
+            va_end(args);
+            ImGui::Text("%s", buf);
+        };
+
+        // simulation parameters
+        nameAndValue("Run Time", "%.1f s", sim.GetRunTimeS());
+        nameAndValue("Score", "%.1f", sim.GetSimScore());
+        nameAndValue("Collided", "%s", sim.HasCollided() ? "yes" : "no");
+        nameAndValue("Finished", "%s", sim.HasFinished() ? "yes" : "no");
+
+        ImGui::EndTable();
+
+        if (ImGui::Button("Restart"))
+        {
+            sim = {0};
+            rebuild = true;
+        }
+    }
+}
+#endif
 
 //==================================================================
 int main( int argc, char *argv[] )
@@ -479,7 +578,7 @@ int main( int argc, char *argv[] )
             break;
 
 #ifdef ENABLE_IMGUI
-        app.DrawMainUIWin( [&]() { handleUI(frameCnt, immgl); } );
+        app.DrawMainUIWin( [&]() { handleUI(frameCnt, sim); } );
 #endif
         glViewport(0, 0, app.GetDispSize()[0], app.GetDispSize()[1]);
         glClearColor( 0, 0, 0, 0 );
@@ -518,7 +617,7 @@ int main( int argc, char *argv[] )
         immgl.SetMtxPS( proj_obj );
 
         // draw the road
-        drawRoad(immgl, 0.f, 0, SLAB_MAX_N);
+        drawRoad(immgl, 0, SLAB_MAX_N);
 
         sim.AnimateSim(FRAME_DT);
 
