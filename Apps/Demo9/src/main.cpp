@@ -36,6 +36,8 @@ static DemoParams   _sPar;
 static bool _sShowDebugDraw = true;
 
 //==================================================================
+static constexpr auto PI2 = 2*glm::pi<float>();
+
 inline constexpr float DEG2RAD( float deg )
 {
     return glm::pi<float>() / 180.f * deg;
@@ -55,9 +57,10 @@ static constexpr auto VH_WIDTH          = 1.0f; // meters
 static constexpr auto VH_LENGTH         = 2.0f; // meters
 static constexpr auto VH_ELEVATION      = 0.5f; // meters
 static constexpr auto VH_YAW_MAX_RAD    = DEG2RAD(30.f); // radians
-static constexpr auto VH_PROBES_N       = 8;
+static constexpr auto VH_PROBES_N       = 16;
 static constexpr auto VH_PROBE_RADIUS   = VH_LENGTH * 3;
 
+static constexpr auto NPC_SPAWN_N       = (size_t)150;
 static constexpr auto NPC_SPEED_MIN_MS  = 4.0f; // meters/second
 static constexpr auto NPC_SPEED_MAX_MS  = 8.0f; // meters/second
 
@@ -132,7 +135,7 @@ public:
     float       mIn_AccPedal = 0;
     float       mIn_SteerSUnit = 0;
     // probe distances to targets
-    float       mIn_ProbeDists[VH_PROBES_N] = {0};
+    float       mIn_ProbeUnitDist[VH_PROBES_N] = {0};
     // probe velocities of target
     float       mIn_ProbeVelXs[VH_PROBES_N] = {0};
     float       mIn_ProbeVelZs[VH_PROBES_N] = {0};
@@ -270,15 +273,15 @@ static double calcYawToTarget(
 //==================================================================
 static void fillVehicleSensors(Vehicle& vh, const std::vector<Vehicle>& others, size_t skipIdx)
 {
-    auto center = vh.mPos;
-    center[1] = 0;
-
     for (size_t i=0; i < VH_PROBES_N; ++i)
     {
-        vh.mIn_ProbeDists[i] = 1.0f; // 1 at radius or more
+        vh.mIn_ProbeUnitDist[i] = 1.0f; // 1 at radius or more
         vh.mIn_ProbeVelXs[i] = 0;
         vh.mIn_ProbeVelZs[i] = 0;
     }
+
+    // arc of a probe
+    const auto probeAngLen = PI2 / VH_PROBES_N;
 
     for (size_t i=0; i < others.size(); ++i)
     {
@@ -287,9 +290,9 @@ static void fillVehicleSensors(Vehicle& vh, const std::vector<Vehicle>& others, 
 
         const auto& other = others[i];
 
-        // no sqr optimization 8)
-        const auto dist = (other.mPos - center).length();
-        if (dist > VH_PROBE_RADIUS)
+        // get the distance, no sqr optimization 8)
+        const auto unitDist = glm::distance(vh.mPos, other.mPos) / VH_PROBE_RADIUS;
+        if (unitDist > 1.0f)
             continue;
 
         // find the yaw to the other vehicle
@@ -313,19 +316,18 @@ example with 4 probes
 
 probeAngLen = 2*pi / 4 (90 degrees)
 #endif
-        static constexpr auto PI2 = 2*glm::pi<float>();
-
-        // arc of a probe
-        const auto probeAngLen = PI2 / VH_PROBES_N;
         // offet into our probe-space
-        const auto probeYaw = yaw + probeAngLen * 0.5f;
+        auto probeYaw = yaw + probeAngLen * 0.5f;
+        // wrap around
+        if (probeYaw < 0)
+            probeYaw += PI2;
 
         // get the index, and wrap it around
         const auto probeIdx = (size_t)((probeYaw / PI2) * (float)VH_PROBES_N) % VH_PROBES_N;
 
         // now that we know into which probe does the target fall, see if the distance is
         // less than the current one, and overwrite if so
-        if (dist < vh.mIn_ProbeDists[probeIdx])
+        if (unitDist < vh.mIn_ProbeUnitDist[probeIdx])
         {
             // build the velocity vector
             const auto vel = Float3{
@@ -334,7 +336,7 @@ probeAngLen = 2*pi / 4 (90 degrees)
                 -other.mSpeed * cosf(other.mYawAng),
             };
 
-            vh.mIn_ProbeDists[probeIdx] = dist;
+            vh.mIn_ProbeUnitDist[probeIdx] = unitDist;
             vh.mIn_ProbeVelXs[probeIdx] = vel[0];
             vh.mIn_ProbeVelZs[probeIdx] = vel[2];
         }
@@ -364,7 +366,7 @@ inline void debugDraw(auto &immgl, const Vehicle& vh)
 
     const auto probeAngLen = PI2 / VH_PROBES_N;
 
-    //const auto fwd = Float3(0,0,-1);
+    const auto fwdSca = Float3(1,1,-1);
 
     // draw the vehicle's probes
     for (size_t i=0; i < VH_PROBES_N; ++i)
@@ -376,12 +378,11 @@ inline void debugDraw(auto &immgl, const Vehicle& vh)
         const auto probeCol =
             hueToColor(360.f * (float)i / (float)VH_PROBES_N) * IColor4(0.7f, 0.7f, 0.7f, 0.3f);
 
-        const auto drawDist = vh.mIn_ProbeDists[i] * VH_PROBE_RADIUS;
+        const auto drawDist = vh.mIn_ProbeUnitDist[i] * VH_PROBE_RADIUS;
 
-        auto makeRotDist = [&](float ang) -> Float3
+        auto makeRotDist = [&](float ang)
         {
-            return
-            {
+            return Float3{
                 drawDist * sinf(ang),
                 0,
                 drawDist * cosf(ang),
@@ -389,11 +390,11 @@ inline void debugDraw(auto &immgl, const Vehicle& vh)
         };
 
         // slightly above the vehicle
-        const auto basePos = vh.mPos + Float3(0, 0.1f, 0);
+        const auto basePos = vh.mPos + Float3(0, 0.3f, 0);
 
         const auto probePos    = basePos;
-        const auto probePosMin = basePos + makeRotDist(probeAngMin);
-        const auto probePosMax = basePos + makeRotDist(probeAngMax);
+        const auto probePosMin = basePos + fwdSca * makeRotDist(probeAngMin);
+        const auto probePosMax = basePos + fwdSca * makeRotDist(probeAngMax);
         immgl.DrawTri({probePos, probePosMin, probePosMax}, probeCol);
     }
 }
@@ -426,7 +427,7 @@ int main( int argc, char *argv[] )
         std::uniform_real_distribution<float> dist(0.f, 1.f);
 
         // generate some NPC vehicles
-        for (size_t i=0; i < 50; ++i)
+        for (size_t i=0; i < NPC_SPAWN_N; ++i)
         {
             // random x at center of each lane, based on SLAB_LANES_N
             const auto laneW = SLAB_WIDTH / SLAB_LANES_N;
