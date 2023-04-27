@@ -17,6 +17,24 @@
                 "program": "${workspaceFolder}/_bin/Demo7",
                 "MIMode": "lldb"
             }
+        },
+        {
+            "name": "Debug Demo9",
+            "type": "cppdbg",
+            "request": "launch",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "windows": {
+                "program": "${workspaceFolder}/_bin/Debug/Demo9",
+                "MIMode": "gdb"
+            },
+            "osx": {
+                "program": "${workspaceFolder}/_bin/Demo9",
+                "MIMode": "lldb"
+            }
         }
     ]
 }
