@@ -182,6 +182,12 @@ public:
     void DrawLine( const IFloat3 &p1, const IFloat3 &p2, const IColor4 &col );
     void DrawLine( const IFloat3 &p1, const IFloat3 &p2, const IColor4 &col1, const IColor4 &col2 );
 
+    void DrawTri(const std::array<IFloat3,3> &poss, const std::array<IColor4,3> &cols);
+    void DrawTri(const std::array<IFloat3,3> &poss, const IColor4 &col)
+    {
+        DrawTri( poss, std::array<IColor4,3>{col,col,col} );
+    }
+
     void DrawQuad( const std::array<IFloat3,4> &poss, const std::array<IColor4,4> &cols );
     void DrawQuad( const std::array<IFloat3,4> &poss, const IColor4 &col );
 
@@ -234,6 +240,20 @@ inline void ImmGL::DrawLine(
     pPos[1] = { p2[0], p2[1], p2[2] };
     pCol[0] = col1;
     pCol[1] = col2;
+}
+
+//==================================================================
+inline void ImmGL::DrawTri(const std::array<IFloat3,3> &poss, const std::array<IColor4,3> &cols)
+{
+    switchModeFlags( FLG_COL );
+    auto *pPos = mList.AllocPos( 3 );
+    auto *pCol = mList.AllocCol( 3 );
+    pPos[0] = poss[0];
+    pPos[1] = poss[1];
+    pPos[2] = poss[2];
+    pCol[0] = cols[0];
+    pCol[1] = cols[1];
+    pCol[2] = cols[2];
 }
 
 //==================================================================
