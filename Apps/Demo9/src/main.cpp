@@ -190,45 +190,6 @@ public:
         handleCollisions();
     }
 
-    void DrawVehicle(ImmGL& immgl)
-    {
-        const auto x0 = mPos[0] - VH_WIDTH  * 0.5f;
-        const auto x1 = mPos[0] + VH_WIDTH  * 0.5f;
-        const auto z0 = mPos[2] - VH_LENGTH * 0.5f;
-        const auto z1 = mPos[2] + VH_LENGTH * 0.5f;
-
-        const std::array<IFloat3,4> vpos = {
-            IFloat3{x0, mPos[1], z0},
-            IFloat3{x1, mPos[1], z0},
-            IFloat3{x0, mPos[1], z1},
-            IFloat3{x1, mPos[1], z1},
-        };
-
-        const auto baseCol = mIsNPC
-            ? IColor4{0.0f,0.0f,1.0f,1.f}
-            : IColor4{1.0f,0.0f,0.0f,1.f};
-
-        const auto frontCol = IColor4{
-            baseCol[0] * 0.7f,
-            baseCol[1] * 0.7f,
-            baseCol[2] * 0.7f,
-            baseCol[3]};
-        const auto backCol = IColor4{
-            baseCol[0] * 0.9f,
-            baseCol[1] * 0.9f,
-            baseCol[2] * 0.9f,
-            baseCol[3]};
-
-        const std::array<IColor4,4> cols = {
-            frontCol,
-            frontCol,
-            backCol,
-            backCol,
-        };
-
-        immgl.DrawQuad(vpos, cols);
-    }
-
 private:
     void handleWrapping()
     {
@@ -255,6 +216,102 @@ private:
         }
     }
 };
+
+//==================================================================
+static void DrawVehicle(ImmGL& immgl, const Vehicle& vh)
+{
+    const auto x0 = vh.mPos[0] - VH_WIDTH  * 0.5f;
+    const auto x1 = vh.mPos[0] + VH_WIDTH  * 0.5f;
+    const auto z0 = vh.mPos[2] - VH_LENGTH * 0.5f;
+    const auto z1 = vh.mPos[2] + VH_LENGTH * 0.5f;
+
+    const std::array<IFloat3,4> vpos = {
+        IFloat3{x0, vh.mPos[1], z0},
+        IFloat3{x1, vh.mPos[1], z0},
+        IFloat3{x0, vh.mPos[1], z1},
+        IFloat3{x1, vh.mPos[1], z1},
+    };
+
+    const auto baseCol = vh.mIsNPC
+        ? IColor4{0.0f,0.0f,1.0f,1.f}
+        : IColor4{1.0f,0.0f,0.0f,1.f};
+
+    const auto frontCol = IColor4{
+        baseCol[0] * 0.7f,
+        baseCol[1] * 0.7f,
+        baseCol[2] * 0.7f,
+        baseCol[3]};
+    const auto backCol = IColor4{
+        baseCol[0] * 0.9f,
+        baseCol[1] * 0.9f,
+        baseCol[2] * 0.9f,
+        baseCol[3]};
+
+    const std::array<IColor4,4> cols = {
+        frontCol,
+        frontCol,
+        backCol,
+        backCol,
+    };
+
+    immgl.DrawQuad(vpos, cols);
+}
+
+//==================================================================
+static IColor4 hueToColor(float hue)
+{
+    // https://en.wikipedia.org/wiki/HSL_and_HSV#From_HSV
+    const auto C = 1.0f;
+    const auto X = C * (1.0f - std::abs( std::fmod(hue / 60.0f, 2.0f) - 1.0f ));
+    const auto m = 0.0f;
+
+    if (hue >=   0.0f && hue <  60.0f) return {C, X, 0.0f, 1}; else
+    if (hue >=  60.0f && hue < 120.0f) return {X, C, 0.0f, 1}; else
+    if (hue >= 120.0f && hue < 180.0f) return {0.0f, C, X, 1}; else
+    if (hue >= 180.0f && hue < 240.0f) return {0.0f, X, C, 1}; else
+    if (hue >= 240.0f && hue < 300.0f) return {X, 0.0f, C, 1}; else
+                                       return {C, 0.0f, X, 1};
+}
+
+//==================================================================
+inline void debugDraw(auto &immgl, const Vehicle& vh)
+{
+    static constexpr auto PI2 = 2*glm::pi<float>();
+
+    const auto probeAngLen = PI2 / VH_PROBES_N;
+
+    const auto fwdSca = Float3(1,1,-1);
+
+    // draw the vehicle's probes
+    for (size_t i=0; i < VH_PROBES_N; ++i)
+    {
+        // calc probe min and max angle
+        const auto probeAngMin = probeAngLen * ((float)i - 0.5f);
+        const auto probeAngMax = probeAngMin + probeAngLen;
+
+        const auto probeCol =
+            hueToColor(360.f * (float)i / (float)VH_PROBES_N) * IColor4(0.7f, 0.7f, 0.7f, 0.3f);
+
+        const auto drawDist = vh.mIn_ProbeUnitDist[i] * VH_PROBE_RADIUS;
+
+        auto makeRotDist = [&](float ang)
+        {
+            return Float3{
+                drawDist * sinf(ang),
+                0,
+                drawDist * cosf(ang),
+            };
+        };
+
+        // slightly above the vehicle
+        const auto basePos = vh.mPos + Float3(0, 0.3f, 0);
+
+        const auto probePos    = basePos;
+        const auto probePosMin = basePos + fwdSca * makeRotDist(probeAngMin);
+        const auto probePosMax = basePos + fwdSca * makeRotDist(probeAngMax);
+        immgl.DrawTri({probePos, probePosMin, probePosMax}, probeCol);
+    }
+}
 
 //==================================================================
 template <typename VEC_T>
@@ -344,86 +401,25 @@ probeAngLen = 2*pi / 4 (90 degrees)
 }
 
 //==================================================================
-static IColor4 hueToColor(float hue)
+class Simulation
 {
-    // https://en.wikipedia.org/wiki/HSL_and_HSV#From_HSV
-    const auto C = 1.0f;
-    const auto X = C * (1.0f - std::abs( std::fmod(hue / 60.0f, 2.0f) - 1.0f ));
-    const auto m = 0.0f;
+    std::vector<Vehicle> mVehicles;
 
-    if (hue >=   0.0f && hue <  60.0f) return {C, X, 0.0f, 1}; else
-    if (hue >=  60.0f && hue < 120.0f) return {X, C, 0.0f, 1}; else
-    if (hue >= 120.0f && hue < 180.0f) return {0.0f, C, X, 1}; else
-    if (hue >= 180.0f && hue < 240.0f) return {0.0f, X, C, 1}; else
-    if (hue >= 240.0f && hue < 300.0f) return {X, 0.0f, C, 1}; else
-                                       return {C, 0.0f, X, 1};
-}
-
-//==================================================================
-inline void debugDraw(auto &immgl, const Vehicle& vh)
-{
-    static constexpr auto PI2 = 2*glm::pi<float>();
-
-    const auto probeAngLen = PI2 / VH_PROBES_N;
-
-    const auto fwdSca = Float3(1,1,-1);
-
-    // draw the vehicle's probes
-    for (size_t i=0; i < VH_PROBES_N; ++i)
+public:
+    Simulation(uint32_t seed)
     {
-        // calc probe min and max angle
-        const auto probeAngMin = probeAngLen * ((float)i - 0.5f);
-        const auto probeAngMax = probeAngMin + probeAngLen;
-
-        const auto probeCol =
-            hueToColor(360.f * (float)i / (float)VH_PROBES_N) * IColor4(0.7f, 0.7f, 0.7f, 0.3f);
-
-        const auto drawDist = vh.mIn_ProbeUnitDist[i] * VH_PROBE_RADIUS;
-
-        auto makeRotDist = [&](float ang)
+        // 0, is our vehicle
         {
-            return Float3{
-                drawDist * sinf(ang),
-                0,
-                drawDist * cosf(ang),
-            };
-        };
+            Vehicle vh;
+            vh.mPos[0] = 0;
+            vh.mPos[1] = VH_ELEVATION;
+            vh.mPos[2] = -4 * SLAB_DEPTH;
+            vh.mIsNPC = false;
+            mVehicles.push_back(vh);
+        }
 
-        // slightly above the vehicle
-        const auto basePos = vh.mPos + Float3(0, 0.3f, 0);
-
-        const auto probePos    = basePos;
-        const auto probePosMin = basePos + fwdSca * makeRotDist(probeAngMin);
-        const auto probePosMax = basePos + fwdSca * makeRotDist(probeAngMax);
-        immgl.DrawTri({probePos, probePosMin, probePosMax}, probeCol);
-    }
-}
-
-//==================================================================
-int main( int argc, char *argv[] )
-{
-    MinimalSDLApp app( argc, argv, 1024, 768, 0
-                    | MinimalSDLApp::FLAG_OPENGL
-                    | MinimalSDLApp::FLAG_RESIZABLE
-                    );
-
-    ImmGL immgl;
-
-    std::vector<Vehicle> vehicles;
-    // at 0, is our vehicle
-    {
-        Vehicle vh;
-        vh.mPos[0] = 0;
-        vh.mPos[1] = VH_ELEVATION;
-        vh.mPos[2] = -4 * SLAB_DEPTH;
-        vh.mIsNPC = false;
-        vehicles.push_back(vh);
-    }
-
-    {
         // random gen and distribution
-        std::random_device rd;
-        std::mt19937 gen(rd());
+        std::mt19937 gen(seed);
         std::uniform_real_distribution<float> dist(0.f, 1.f);
 
         // generate some NPC vehicles
@@ -443,11 +439,37 @@ int main( int argc, char *argv[] )
             vh.mPos[2] = z;
             vh.mSpeed = glm::mix(NPC_SPEED_MIN_MS, NPC_SPEED_MAX_MS, dist(gen));
             vh.mIsNPC = true;
-            vehicles.push_back(vh);
+            mVehicles.push_back(vh);
         }
     }
 
+    void AnimateSim(float dt)
+    {
+        // animate the vehicles
+        fillVehicleSensors(mVehicles[0], mVehicles, 0);
+        for (auto& vh : mVehicles)
+        {
+            vh.ApplyInputs(dt);
+            vh.AnimateVehicle(dt);
+        }
+    }
+
+    const auto& GetVehicles() const { return mVehicles; }
+};
+
+//==================================================================
+int main( int argc, char *argv[] )
+{
+    MinimalSDLApp app( argc, argv, 1024, 768, 0
+                    | MinimalSDLApp::FLAG_OPENGL
+                    | MinimalSDLApp::FLAG_RESIZABLE
+                    );
+
+    ImmGL immgl;
+
     static constexpr auto FRAME_DT = 1.f / 60.f;
+
+    Simulation sim(0);
 
     // begin the main/rendering loop
     for (size_t frameCnt=0; ; ++frameCnt)
@@ -498,21 +520,15 @@ int main( int argc, char *argv[] )
         // draw the road
         drawRoad(immgl, 0.f, 0, SLAB_MAX_N);
 
-        // animate the vehicles
-        fillVehicleSensors(vehicles[0], vehicles, 0);
-        for (auto& vh : vehicles)
-        {
-            vh.ApplyInputs(FRAME_DT);
-            vh.AnimateVehicle(FRAME_DT);
-        }
+        sim.AnimateSim(FRAME_DT);
 
         // draw the vehicles
-        for (auto& vh : vehicles)
-            vh.DrawVehicle(immgl);
+        for (auto& vh : sim.GetVehicles())
+            DrawVehicle(immgl, vh);
 
         // draw the debug stuff
         if (_sShowDebugDraw)
-            debugDraw(immgl, vehicles[0]);
+            debugDraw(immgl, sim.GetVehicles()[0]);
 
         immgl.FlushStdList();
 
