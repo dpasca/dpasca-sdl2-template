@@ -329,7 +329,7 @@ void DemoMain::doStartTraining()
             while (oSim->IsSimRunning() && !reqShutdown)
                 oSim->AnimateSim(FRAME_DT);
 
-            totCost += 1.0 / (oSim->GetSimScore() + 1.0);
+            totCost += 1.0 / (oSim->GetSimScore() + 0.0001);
         }
 
         return totCost / SIM_TRAIN_VARIANTS_N;

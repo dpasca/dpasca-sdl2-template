@@ -30,23 +30,24 @@ inline constexpr float DEG2RAD( float deg )
 
 // road params
 static constexpr auto SLAB_DEPTH = 1.f; // meters
-static constexpr auto SLAB_WIDTH = 12.f; // meters
+static constexpr auto SLAB_WIDTH = 16.f; // meters
 static constexpr auto SLAB_MAX_N = 1000; // meters
 static constexpr auto SLAB_STA_IDX = 4;
 static constexpr auto SLAB_END_IDX = SLAB_MAX_N - 10;
 static constexpr auto SLAB_LANES_N = 4;
 
 // vehicle params
-static constexpr auto VH_MAX_SPEED_MS   = 20.f; // meters/second
-static constexpr auto VH_MAX_ACCEL_MS   = 200.f; // meters/second^2
+static constexpr auto VH_MAX_SPEED_MS   = 40.f; // meters/second
+static constexpr auto VH_MAX_ACCEL_MS   = 400.f; // meters/second^2
+static constexpr auto VH_MAX_DECEL_MS   = -400.f; // meters/second^2
 static constexpr auto VH_CRAWL_SPEED_MS = 1.0f; // meters/second
 static constexpr auto VH_WIDTH          = 1.0f; // meters
 static constexpr auto VH_LENGTH         = 2.0f; // meters
 static constexpr auto VH_ELEVATION      = 0.5f; // meters
-static constexpr auto VH_YAW_MAX_RAD    = DEG2RAD(30.f); // radians
-static constexpr auto VH_PROBE_RADIUS   = VH_LENGTH * 5;
+static constexpr auto VH_YAW_MAX_RAD    = DEG2RAD(45.f); // radians
+static constexpr auto VH_PROBE_RADIUS   = VH_LENGTH * 10;
 
-static constexpr auto NPC_SPAWN_N       = (size_t)150;
+static constexpr auto NPC_SPAWN_N       = (size_t)50;
 static constexpr auto NPC_SPEED_MIN_MS  = 4.0f; // meters/second
 static constexpr auto NPC_SPEED_MAX_MS  = 8.0f; // meters/second
 
@@ -62,7 +63,7 @@ static auto attenuateVal = [](auto val, auto dt, auto att)
 class Vehicle
 {
 public:
-    static inline constexpr size_t PROBES_N = 16;
+    static inline constexpr size_t PROBES_N = 32;
 
     // we put all of the sensors in a single enum and single array, to easily
     // feed them to the feed-forward NN
@@ -70,21 +71,31 @@ public:
     {
         SENS_POS_X,
         SENS_SPEED,
+        SENS_ACCEL,
+        SENS_VEL_X,
+        SENS_VEL_Z,
         SENS_YAW,
+
+        SENS_EDGE_DIST_NORM,
+
         SENS_PROBE_FIRST_UNITDIST,
         SENS_PROBE_LAST_UNITDIST = SENS_PROBE_FIRST_UNITDIST + PROBES_N - 1,
 
-        SENS_PROBE_FIRST_VEL_X,
-        SENS_PROBE_LAST_VEL_X = SENS_PROBE_FIRST_VEL_X + PROBES_N - 1,
+        SENS_PROBE_FIRST_X,
+        SENS_PROBE_LAST_X = SENS_PROBE_FIRST_X + PROBES_N - 1,
 
-        SENS_PROBE_FIRST_VEL_Z,
-        SENS_PROBE_LAST_VEL_Z = SENS_PROBE_FIRST_VEL_Z + PROBES_N - 1,
+        SENS_PROBE_FIRST_SPEED,
+        SENS_PROBE_LAST_VEL_X = SENS_PROBE_FIRST_SPEED + PROBES_N - 1,
+
+        SENS_PROBE_FIRST_YAW,
+        SENS_PROBE_LAST_VEL_Z = SENS_PROBE_FIRST_YAW + PROBES_N - 1,
 
         SENS_N
     };
     enum Controls : size_t
     {
         CTRL_ACCEL_PEDAL, // 0..1
+        CTRL_BRAKE_PEDAL, // 0..1
         CTRL_STEER_UNIT,  // 0..1 (left to right)
         CTRL_N
     };
@@ -97,6 +108,7 @@ public:
     Float3      mPos {0,0,0};
     float       mSpeed = 0;
     float       mAccel = 0;
+    float       mBrake = 0;
     float       mYawAng = 0;
 
     bool        mIsNPC = true;
@@ -106,6 +118,7 @@ public:
     {
         // modify the state by applying the controls
         mAccel  += dt * VH_MAX_ACCEL_MS *  mCtrls[CTRL_ACCEL_PEDAL];
+        mBrake  += dt * VH_MAX_DECEL_MS *  mCtrls[CTRL_BRAKE_PEDAL];
         mYawAng += dt * VH_YAW_MAX_RAD  * (mCtrls[CTRL_STEER_UNIT] - 0.5f);
     }
 
@@ -120,10 +133,12 @@ public:
         }
 
         mSpeed += mAccel * dt;
+        mSpeed += mBrake * dt; // will clamp to 0 below
 
         // clamp values
         mSpeed = std::clamp(mSpeed, 0.f, VH_MAX_SPEED_MS);
         mAccel = std::clamp(mAccel, 0.f, VH_MAX_ACCEL_MS);
+        mBrake = std::clamp(mBrake, VH_MAX_DECEL_MS, 0.f);
         mYawAng = std::clamp(mYawAng, -VH_YAW_MAX_RAD, VH_YAW_MAX_RAD);
 
         // build the velocity vector
@@ -151,6 +166,7 @@ private:
         if (mPos[2] < trackMinZ)
             mPos[2] -= trackMinZ;
     }
+#if 0
     // these are soft-edges... slow down when going to gravel
     void handleSoftEdges()
     {
@@ -188,6 +204,7 @@ private:
             //mHasCollided = true;
         }
     }
+#endif
 };
 
 //==================================================================
@@ -209,12 +226,17 @@ static void fillVehicleSensors(Vehicle& vh, const std::vector<Vehicle>& others, 
 {
     vh.mSens[Vehicle::SENS_POS_X] = vh.mPos[0];
     vh.mSens[Vehicle::SENS_SPEED] = vh.mSpeed;
+    vh.mSens[Vehicle::SENS_ACCEL] = vh.mAccel;
+    vh.mSens[Vehicle::SENS_VEL_X] = -vh.mSpeed * sinf(vh.mYawAng);
+    vh.mSens[Vehicle::SENS_VEL_Z] = -vh.mSpeed * cosf(vh.mYawAng);
     vh.mSens[Vehicle::SENS_YAW] = vh.mYawAng;
+    vh.mSens[Vehicle::SENS_EDGE_DIST_NORM] = vh.mPos[0] / (SLAB_WIDTH * 0.5f);
     for (size_t i=0; i < Vehicle::PROBES_N; ++i)
     {
+        vh.mSens[Vehicle::SENS_PROBE_FIRST_X + i] = 0;
         vh.mSens[Vehicle::SENS_PROBE_FIRST_UNITDIST + i] = 1.0f; // 1 at radius or more
-        vh.mSens[Vehicle::SENS_PROBE_FIRST_VEL_X + i] = 0;
-        vh.mSens[Vehicle::SENS_PROBE_FIRST_VEL_Z + i] = 0;
+        vh.mSens[Vehicle::SENS_PROBE_FIRST_SPEED + i] = 0;
+        vh.mSens[Vehicle::SENS_PROBE_FIRST_YAW + i] = 0;
     }
 
     // arc of a probe
@@ -266,16 +288,10 @@ probeAngLen = 2*pi / 4 (90 degrees)
         // less than the current one, and overwrite if so
         if (unitDist < vh.mSens[Vehicle::SENS_PROBE_FIRST_UNITDIST + probeIdx])
         {
-            // build the velocity vector
-            const auto vel = Float3{
-                -other.mSpeed * sinf(other.mYawAng),
-                0,
-                -other.mSpeed * cosf(other.mYawAng),
-            };
-
+            vh.mSens[Vehicle::SENS_PROBE_FIRST_X + probeIdx] = other.mPos[0];
             vh.mSens[Vehicle::SENS_PROBE_FIRST_UNITDIST + probeIdx] = unitDist;
-            vh.mSens[Vehicle::SENS_PROBE_FIRST_VEL_X + probeIdx] = vel[0];
-            vh.mSens[Vehicle::SENS_PROBE_FIRST_VEL_Z + probeIdx] = vel[2];
+            vh.mSens[Vehicle::SENS_PROBE_FIRST_SPEED + probeIdx] = other.mSpeed;
+            vh.mSens[Vehicle::SENS_PROBE_FIRST_YAW + probeIdx] = other.mYawAng;
         }
     }
 }
@@ -364,18 +380,22 @@ public:
         if (ourVh.mPos[2] < (-SLAB_DEPTH * SLAB_END_IDX))
             mHasArrived = true;
 
+        // slightly forgiving collision bounds
+        const auto useW = VH_WIDTH * 0.9f;
+        const auto useL = VH_LENGTH * 0.9f;
+
         // check for collisions
-        const auto ourMinX = ourVh.mPos[0] - VH_WIDTH * 0.5f;
-        const auto ourMaxX = ourVh.mPos[0] + VH_WIDTH * 0.5f;
-        const auto ourMinZ = ourVh.mPos[2] - VH_LENGTH * 0.5f;
-        const auto ourMaxZ = ourVh.mPos[2] + VH_LENGTH * 0.5f;
+        const auto ourMinX = ourVh.mPos[0] - useW * 0.5f;
+        const auto ourMaxX = ourVh.mPos[0] + useW * 0.5f;
+        const auto ourMinZ = ourVh.mPos[2] - useL * 0.5f;
+        const auto ourMaxZ = ourVh.mPos[2] + useL * 0.5f;
         for (size_t i=1; i < mVehicles.size(); ++i)
         {
             const auto& vh = mVehicles[i];
-            const auto minX = vh.mPos[0] - VH_WIDTH * 0.5f;
-            const auto maxX = vh.mPos[0] + VH_WIDTH * 0.5f;
-            const auto minZ = vh.mPos[2] - VH_LENGTH * 0.5f;
-            const auto maxZ = vh.mPos[2] + VH_LENGTH * 0.5f;
+            const auto minX = vh.mPos[0] - useW * 0.5f;
+            const auto maxX = vh.mPos[0] + useW * 0.5f;
+            const auto minZ = vh.mPos[2] - useL * 0.5f;
+            const auto maxZ = vh.mPos[2] + useL * 0.5f;
 
             if (ourMinX < maxX && ourMaxX > minX &&
                 ourMinZ < maxZ && ourMaxZ > minZ)
@@ -407,12 +427,23 @@ public:
         if (mRunTimeS <= 0)
             return 0;
 
-        const auto penaltySca = mHasHitVehicle || mHasHitCurb ? 0.1 : 1.0;
-        const auto winningSca = mHasArrived ? 5.0 : 1.0;
+        const auto staZ = SLAB_STA_IDX * -SLAB_DEPTH;
+        const auto endZ = SLAB_END_IDX * -SLAB_DEPTH;
 
-        assert(mVehicles[0].mPos[2] <= 0);
+        const auto curZ = mVehicles[0].mPos[2];
+        const auto goalReachUnit = (curZ - staZ) / (endZ - staZ);
 
-        return -mVehicles[0].mPos[2] * penaltySca * winningSca;// / log10(mRunTimeS + 1);
+        // distance is the most important factor
+        auto score = (double)goalReachUnit;
+
+        // strong penalty for crashing into something
+        if (mHasHitVehicle || mHasHitCurb)
+            score *= 0.01;
+
+        if (mHasArrived)
+            score *= (1.0 + 1.0 / mRunTimeS);
+
+        return score;
     }
 
     const auto& GetVehicles() const { return mVehicles; }
