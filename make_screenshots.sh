@@ -30,6 +30,7 @@ run_demo "5" 50
 run_demo "6" 110
 run_demo "7" 50
 run_demo "8" 50
+run_demo "9" 10000
 
 mogrify -format png *.bmp
 
