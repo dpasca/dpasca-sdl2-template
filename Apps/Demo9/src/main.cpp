@@ -18,6 +18,12 @@
 #include "MathBase.h"
 #include "ImmGL.h"
 #include "MinimalSDLApp.h"
+#include "CS_ModelFactory.h"
+#include "CS_Trainer.h"
+#include "Simulation.h"
+
+// speed of our simulation, as well as display
+static constexpr auto FRAME_DT = 1.f / 60.f;
 
 //==================================================================
 static constexpr float DISP_CAM_NEAR    = 0.1f;     // near plane (meters)
@@ -26,144 +32,111 @@ static constexpr float DISP_CAM_FAR     = 1000.f;   // far plane (meters)
 struct DemoParams
 {
     float       DISP_CAM_FOV_DEG    = 50.f;       // field of view
-    float       DISP_CAM_DIST       = 8;
+    float       DISP_CAM_DIST       = 12;
     float       DISP_CAM_HEIGHT     = 4;
     Float2      DISP_CAM_PY_ANGS    = {20.f, 0.f};
-};
-
-static DemoParams   _sPar;
-
-static bool _sShowDebugDraw = true;
+} _sPar;
 
 //==================================================================
-static constexpr auto PI2 = 2*glm::pi<float>();
-
-inline constexpr float DEG2RAD( float deg )
-{
-    return glm::pi<float>() / 180.f * deg;
-}
-
-// road params
-static constexpr auto SLAB_DEPTH = 1.f; // meters
-static constexpr auto SLAB_WIDTH = 12.f; // meters
-static constexpr auto SLAB_MAX_N = 1000; // meters
-static constexpr auto SLAB_STA_IDX = 4;
-static constexpr auto SLAB_END_IDX = SLAB_MAX_N - 10;
-static constexpr auto SLAB_LANES_N = 4;
-
-// vehicle params
-static constexpr auto VH_MAX_SPEED_MS   = 20.f; // meters/second
-static constexpr auto VH_MAX_ACCEL_MS   =  5.f; // meters/second^2
-static constexpr auto VH_CRAWL_SPEED_MS = 1.0f; // meters/second
-static constexpr auto VH_WIDTH          = 1.0f; // meters
-static constexpr auto VH_LENGTH         = 2.0f; // meters
-static constexpr auto VH_ELEVATION      = 0.5f; // meters
-static constexpr auto VH_YAW_MAX_RAD    = DEG2RAD(30.f); // radians
-static constexpr auto VH_PROBES_N       = 16;
-static constexpr auto VH_PROBE_RADIUS   = VH_LENGTH * 3;
-
-static constexpr auto NPC_SPAWN_N       = (size_t)150;
-static constexpr auto NPC_SPEED_MIN_MS  = 4.0f; // meters/second
-static constexpr auto NPC_SPEED_MAX_MS  = 8.0f; // meters/second
-
-//==================================================================
-static auto attenuateVal = [](auto val, auto dt, auto att)
-{
-    return val * (decltype(dt))(1 - att * dt);
-};
-
-//==================================================================
-class Vehicle
+class DemoMain
 {
 public:
-    // inputs
-    float       mIn_AccPedal = 0;
-    float       mIn_SteerSUnit = 0;
-    // probe distances to targets
-    float       mIn_ProbeUnitDist[VH_PROBES_N] = {0};
-    // probe velocities of target
-    float       mIn_ProbeVelXs[VH_PROBES_N] = {0};
-    float       mIn_ProbeVelZs[VH_PROBES_N] = {0};
+    bool                            mShowDebugDraw = true;
 
-    // state
-    Float3      mPos {0,0,0};
-    float       mSpeed = 0;
-    float       mAccel = 0;
-    float       mYawAng = 0;
+    // training variables
+    std::unique_ptr<CS_Trainer>     moTrainer;
+    size_t                          mCurModelIdx = 0;
+    size_t                          mLastEpoch = 0;
+    double                          mLastEpochTimeS = 0;
+    double                          mLastEpochLenTimeS = 0;
+    // periodically updated from the training
+    std::vector<CS_Chromo>          mBestChromos;
+    std::vector<CS_ChromoInfo>      mBestCInfos;
 
-    bool        mIsNPC = true;
+    // simulation to play/test
+    uint32_t                        mPlaySeed = 0;
+    std::unique_ptr<Simulation>     moPlaySim;
+    std::unique_ptr<CS_BrainBase>   moPlayBrain;
 
-    //
-    void ApplyInputs(float dt)
-    {
-        // apply the inputs
-        mAccel  += mIn_AccPedal   * VH_MAX_ACCEL_MS * dt;
-        mYawAng += mIn_SteerSUnit * VH_YAW_MAX_RAD * dt;
-    }
+    void AnimateDemo(float dt);
+    void DrawDemo(ImmGL& immgl);
+    Float3 GetOurVehiclePos() const;
 
-    void AnimateVehicle(float dt)
-    {
-        // NPCs just go forward
-        if (mIsNPC)
-        {
-            mPos[2] += -mSpeed * dt;
-            handleWrapping();
-            return;
-        }
-
-        mSpeed += mAccel * dt;
-
-        // clamp values
-        mSpeed = std::clamp(mSpeed, 0.f, VH_MAX_SPEED_MS);
-        mAccel = std::clamp(mAccel, 0.f, VH_MAX_ACCEL_MS);
-        mYawAng = std::clamp(mYawAng, -VH_YAW_MAX_RAD, VH_YAW_MAX_RAD);
-
-        // build the velocity vector
-        const auto vel = Float3{
-            -mSpeed * sinf(mYawAng),
-            0,
-            -mSpeed * cosf(mYawAng)
-        };
-
-        // apply the velocity to the position
-        mPos += vel * dt;
-
-        // wind, friction, etc.
-        mSpeed = attenuateVal(mSpeed, dt, 0.1f);
-
-        handleWrapping();
-        handleCollisions();
-    }
+    void HandleUI(size_t frameCnt);
 
 private:
-    void handleWrapping()
-    {
-        const auto trackMinZ = -SLAB_DEPTH * (SLAB_MAX_N - 1);
-        if (mPos[2] < trackMinZ)
-            mPos[2] -= trackMinZ;
-    }
-    //
-    void handleCollisions()
-    {
-        const auto edgeL = -SLAB_WIDTH * (0.5f + 0.05f);
-        const auto edgeR =  SLAB_WIDTH * (0.5f + 0.05f);
+    void handleTrainUI();
+    void handlePlayUI();
 
-        if ( mPos[0] < edgeL )
-        {
-            mPos[0] = edgeL;
-            mSpeed = std::min(mSpeed, VH_CRAWL_SPEED_MS);
-        }
-        else
-        if ( mPos[0] > edgeR )
-        {
-            mPos[0] = edgeR;
-            mSpeed = std::min(mSpeed, VH_CRAWL_SPEED_MS);
-        }
-    }
-};
+    void animateTrainer();
+} _demoMain;
 
 //==================================================================
-static void DrawVehicle(ImmGL& immgl, const Vehicle& vh)
+inline double GetSteadyTimeS()
+{
+    return
+        (double)std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch() ).count() / 1e6;
+}
+
+//==================================================================
+static IColor4 hueToColor(float hue)
+{
+    // https://en.wikipedia.org/wiki/HSL_and_HSV#From_HSV
+    const auto C = 1.0f;
+    const auto X = C * (1.0f - std::abs( std::fmod(hue / 60.0f, 2.0f) - 1.0f ));
+    const auto m = 0.0f;
+
+    if (hue >=   0.0f && hue <  60.0f) return {C, X, 0.0f, 1}; else
+    if (hue >=  60.0f && hue < 120.0f) return {X, C, 0.0f, 1}; else
+    if (hue >= 120.0f && hue < 180.0f) return {0.0f, C, X, 1}; else
+    if (hue >= 180.0f && hue < 240.0f) return {0.0f, X, C, 1}; else
+    if (hue >= 240.0f && hue < 300.0f) return {X, 0.0f, C, 1}; else
+                                       return {C, 0.0f, X, 1};
+}
+
+//==================================================================
+inline void debugDraw(auto &immgl, const Vehicle& vh)
+{
+    static constexpr auto PI2 = 2*glm::pi<float>();
+
+    const auto probeAngLen = PI2 / Vehicle::PROBES_N;
+
+    const auto fwdSca = Float3(1,1,-1);
+
+    // draw the vehicle's probes
+    for (size_t i=0; i < Vehicle::PROBES_N; ++i)
+    {
+        // calc probe min and max angle
+        const auto probeAngMin = probeAngLen * ((float)i - 0.5f);
+        const auto probeAngMax = probeAngMin + probeAngLen;
+
+        const auto probeCol =
+            hueToColor(360.f * (float)i / (float)Vehicle::PROBES_N) * IColor4(0.7f, 0.7f, 0.7f, 0.3f);
+
+        const auto drawDist = vh.mSens[Vehicle::SENS_PROBE_FIRST_UNITDIST + i] * VH_PROBE_RADIUS;
+
+        auto makeRotDist = [&](float ang)
+        {
+            return Float3{
+                drawDist * sinf(ang),
+                0,
+                drawDist * cosf(ang),
+            };
+        };
+
+        // slightly above the vehicle
+        const auto basePos = vh.mPos + Float3(0, 0.3f, 0);
+
+        const auto probePos    = basePos;
+        const auto probePosMin = basePos + fwdSca * makeRotDist(probeAngMin);
+        const auto probePosMax = basePos + fwdSca * makeRotDist(probeAngMax);
+        immgl.DrawTri({probePos, probePosMin, probePosMax}, probeCol);
+    }
+}
+
+//==================================================================
+static void drawVehicle(ImmGL& immgl, const Vehicle& vh)
 {
     const auto x0 = vh.mPos[0] - VH_WIDTH  * 0.5f;
     const auto x1 = vh.mPos[0] + VH_WIDTH  * 0.5f;
@@ -201,258 +174,6 @@ static void DrawVehicle(ImmGL& immgl, const Vehicle& vh)
 
     immgl.DrawQuad(vpos, cols);
 }
-
-//==================================================================
-static IColor4 hueToColor(float hue)
-{
-    // https://en.wikipedia.org/wiki/HSL_and_HSV#From_HSV
-    const auto C = 1.0f;
-    const auto X = C * (1.0f - std::abs( std::fmod(hue / 60.0f, 2.0f) - 1.0f ));
-    const auto m = 0.0f;
-
-    if (hue >=   0.0f && hue <  60.0f) return {C, X, 0.0f, 1}; else
-    if (hue >=  60.0f && hue < 120.0f) return {X, C, 0.0f, 1}; else
-    if (hue >= 120.0f && hue < 180.0f) return {0.0f, C, X, 1}; else
-    if (hue >= 180.0f && hue < 240.0f) return {0.0f, X, C, 1}; else
-    if (hue >= 240.0f && hue < 300.0f) return {X, 0.0f, C, 1}; else
-                                       return {C, 0.0f, X, 1};
-}
-
-//==================================================================
-inline void debugDraw(auto &immgl, const Vehicle& vh)
-{
-    static constexpr auto PI2 = 2*glm::pi<float>();
-
-    const auto probeAngLen = PI2 / VH_PROBES_N;
-
-    const auto fwdSca = Float3(1,1,-1);
-
-    // draw the vehicle's probes
-    for (size_t i=0; i < VH_PROBES_N; ++i)
-    {
-        // calc probe min and max angle
-        const auto probeAngMin = probeAngLen * ((float)i - 0.5f);
-        const auto probeAngMax = probeAngMin + probeAngLen;
-
-        const auto probeCol =
-            hueToColor(360.f * (float)i / (float)VH_PROBES_N) * IColor4(0.7f, 0.7f, 0.7f, 0.3f);
-
-        const auto drawDist = vh.mIn_ProbeUnitDist[i] * VH_PROBE_RADIUS;
-
-        auto makeRotDist = [&](float ang)
-        {
-            return Float3{
-                drawDist * sinf(ang),
-                0,
-                drawDist * cosf(ang),
-            };
-        };
-
-        // slightly above the vehicle
-        const auto basePos = vh.mPos + Float3(0, 0.3f, 0);
-
-        const auto probePos    = basePos;
-        const auto probePosMin = basePos + fwdSca * makeRotDist(probeAngMin);
-        const auto probePosMax = basePos + fwdSca * makeRotDist(probeAngMax);
-        immgl.DrawTri({probePos, probePosMin, probePosMax}, probeCol);
-    }
-}
-
-//==================================================================
-template <typename VEC_T>
-static double calcYawToTarget(
-    const VEC_T& fwd,
-    const VEC_T& pos,
-    const VEC_T& targetPos)
-{
-    const auto targetDir = glm::normalize(targetPos - pos);
-    //const auto fwdXZ = glm::normalize( VEC_T(fwd[0], 0.0f, fwd[2]) );
-    double yaw = atan2(targetDir[2], targetDir[0]) - atan2(fwd[2], fwd[0]);
-    yaw = atan2(sin(yaw), cos(yaw));
-    return yaw;
-}
-
-//==================================================================
-static void fillVehicleSensors(Vehicle& vh, const std::vector<Vehicle>& others, size_t skipIdx)
-{
-    for (size_t i=0; i < VH_PROBES_N; ++i)
-    {
-        vh.mIn_ProbeUnitDist[i] = 1.0f; // 1 at radius or more
-        vh.mIn_ProbeVelXs[i] = 0;
-        vh.mIn_ProbeVelZs[i] = 0;
-    }
-
-    // arc of a probe
-    const auto probeAngLen = PI2 / VH_PROBES_N;
-
-    for (size_t i=0; i < others.size(); ++i)
-    {
-        if (i == skipIdx)
-            continue;
-
-        const auto& other = others[i];
-
-        // get the distance, no sqr optimization 8)
-        const auto unitDist = glm::distance(vh.mPos, other.mPos) / VH_PROBE_RADIUS;
-        if (unitDist > 1.0f)
-            continue;
-
-        // find the yaw to the other vehicle
-        const auto yaw = calcYawToTarget(Float3(0,0,-1), vh.mPos, other.mPos);
-        // select a sensor index based on the yaw, given VH_PROBES_N distributed
-        // around the circle
-
-        // offset the yaw so that we're in the middle of the range of the sensor
-        //  (we want the front sensor to grab left and right equally)
-#if 0
-example with 4 probes
-                     0
-      -probeAngLen/2 | +probeAngLen/2
-                   \ | /
-                    \|/
-                1----+----3
-                    /|\
-                   / | \
-                     |
-                     2
-
-probeAngLen = 2*pi / 4 (90 degrees)
-#endif
-        // offet into our probe-space
-        auto probeYaw = yaw + probeAngLen * 0.5f;
-        // wrap around
-        if (probeYaw < 0)
-            probeYaw += PI2;
-
-        // get the index, and wrap it around
-        const auto probeIdx = (size_t)((probeYaw / PI2) * (float)VH_PROBES_N) % VH_PROBES_N;
-
-        // now that we know into which probe does the target fall, see if the distance is
-        // less than the current one, and overwrite if so
-        if (unitDist < vh.mIn_ProbeUnitDist[probeIdx])
-        {
-            // build the velocity vector
-            const auto vel = Float3{
-                -other.mSpeed * sinf(other.mYawAng),
-                0,
-                -other.mSpeed * cosf(other.mYawAng),
-            };
-
-            vh.mIn_ProbeUnitDist[probeIdx] = unitDist;
-            vh.mIn_ProbeVelXs[probeIdx] = vel[0];
-            vh.mIn_ProbeVelZs[probeIdx] = vel[2];
-        }
-    }
-}
-
-//==================================================================
-class Simulation
-{
-    std::vector<Vehicle> mVehicles;
-
-    double               mRunTimeS = 0;
-    bool                 mHasCollided = false;
-    bool                 mHasFinished = false;
-
-public:
-    Simulation(uint32_t seed)
-    {
-        // 0, is our vehicle
-        {
-            Vehicle vh;
-            vh.mPos[0] = 0;
-            vh.mPos[1] = VH_ELEVATION;
-            vh.mPos[2] = -4 * SLAB_DEPTH;
-            vh.mIsNPC = false;
-            mVehicles.push_back(vh);
-        }
-
-        // random gen and distribution
-        std::mt19937 gen(seed);
-        std::uniform_real_distribution<float> dist(0.f, 1.f);
-
-        // generate some NPC vehicles
-        for (size_t i=0; i < NPC_SPAWN_N; ++i)
-        {
-            // random x at center of each lane, based on SLAB_LANES_N
-            const auto laneW = SLAB_WIDTH / SLAB_LANES_N;
-            const auto lane = dist(gen) * (SLAB_LANES_N-1);
-            const auto x = lane * laneW - SLAB_WIDTH * 0.5f + laneW * 0.5f;
-
-            // z from slab 0 to SLAB_MAX_N-1
-            const auto z = dist(gen) * (SLAB_MAX_N-1) * -SLAB_DEPTH;
-
-            Vehicle vh;
-            vh.mPos[0] = x;
-            vh.mPos[1] = VH_ELEVATION;
-            vh.mPos[2] = z;
-            vh.mSpeed = glm::mix(NPC_SPEED_MIN_MS, NPC_SPEED_MAX_MS, dist(gen));
-            vh.mIsNPC = true;
-            mVehicles.push_back(vh);
-        }
-    }
-
-    void AnimateSim(float dt)
-    {
-        if (mHasCollided || mHasFinished)
-            return;
-
-        mRunTimeS += dt;
-
-        // animate the vehicles
-        fillVehicleSensors(mVehicles[0], mVehicles, 0);
-        for (auto& vh : mVehicles)
-        {
-            vh.ApplyInputs(dt);
-            vh.AnimateVehicle(dt);
-        }
-
-        // see if we reached the end
-        if (mVehicles[0].mPos[2] < (-SLAB_DEPTH * SLAB_END_IDX))
-            mHasFinished = true;
-
-        // check for collisions
-        const auto& ourVh = mVehicles[0];
-        const auto ourMinX = ourVh.mPos[0] - VH_WIDTH * 0.5f;
-        const auto ourMaxX = ourVh.mPos[0] + VH_WIDTH * 0.5f;
-        const auto ourMinZ = ourVh.mPos[2] - VH_LENGTH * 0.5f;
-        const auto ourMaxZ = ourVh.mPos[2] + VH_LENGTH * 0.5f;
-        for (size_t i=1; i < mVehicles.size(); ++i)
-        {
-            const auto& vh = mVehicles[i];
-            const auto minX = vh.mPos[0] - VH_WIDTH * 0.5f;
-            const auto maxX = vh.mPos[0] + VH_WIDTH * 0.5f;
-            const auto minZ = vh.mPos[2] - VH_LENGTH * 0.5f;
-            const auto maxZ = vh.mPos[2] + VH_LENGTH * 0.5f;
-
-            if (ourMinX < maxX && ourMaxX > minX &&
-                ourMinZ < maxZ && ourMaxZ > minZ)
-            {
-                mHasCollided = true;
-                break;
-            }
-        }
-    }
-
-    double GetRunTimeS() const { return mRunTimeS; }
-    bool HasCollided() const { return mHasCollided; }
-    bool HasFinished() const { return mHasFinished; }
-
-    double GetSimScore() const
-    {
-        const auto penaltySca = mHasCollided ? 0.5 : 1.0;
-        const auto winningSca = mHasFinished ? 1.5 : 1.0;
-
-        if (mRunTimeS <= 0)
-            return 0;
-
-        assert(mVehicles[0].mPos[2] <= 0);
-
-        return -mVehicles[0].mPos[2] * penaltySca * winningSca / mRunTimeS;
-    }
-
-    const auto& GetVehicles() const { return mVehicles; }
-};
 
 //==================================================================
 static void drawRoad(
@@ -493,29 +214,246 @@ static void drawRoad(
     }
 }
 
-#ifdef ENABLE_IMGUI
 //==================================================================
-static void handleUI(size_t frameCnt, Simulation& sim)
+void DemoMain::AnimateDemo(float dt)
 {
-    auto header = []( const std::string &name, bool defOpen )
-    {
-        return ImGui::CollapsingHeader(
-                    (name + "##head").c_str(),
-                    defOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0);
-    };
+    // animate the play/display simulation
+    if (moPlaySim)
+        moPlaySim->AnimateSim(dt);
 
-    bool rebuild = false;
+    // animate the trainer
+    if (moTrainer)
+        animateTrainer();
+}
 
-    if ( header( "Display", true ) )
+//==================================================================
+void DemoMain::animateTrainer()
+{
+    if (!moTrainer)
+        return;
+
+    if (const auto curEpoch = moTrainer->GetCurEpochN(); curEpoch != mLastEpoch)
     {
-        ImGui::SliderFloat( "Camera FOV", &_sPar.DISP_CAM_FOV_DEG, 10.f, 120.f );
-        ImGui::SliderFloat( "Camera Dist", &_sPar.DISP_CAM_DIST, 0.f, DISP_CAM_FAR/10 );
-        ImGui::SliderFloat2( "Camera Pitch/Yaw", &_sPar.DISP_CAM_PY_ANGS[0], -180, 180 );
-        ImGui::NewLine();
-        ImGui::Checkbox("Debug Draw", &_sShowDebugDraw);
+        const auto curTimeS = GetSteadyTimeS();
+        mLastEpochLenTimeS = curTimeS - mLastEpochTimeS;
+        mLastEpoch = curEpoch;
+        mLastEpochTimeS = curTimeS;
     }
 
-    if (header("Simulation", true))
+    auto& fut = moTrainer->GetTrainerFuture();
+    // if the future is valid and it's ready
+    if (fut.valid() && fut.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+    {
+        moTrainer->LockViewBestChromos([&](const auto&, const auto& infos)
+        {
+            if (infos.empty())
+                printf("Training ended.");
+            else
+                printf("Training ended. Best chromo: %s, cost:%f",
+                    infos.front().MakeStrID().c_str(),
+                    infos.front().ci_cost);
+        });
+
+        moTrainer.reset();
+    }
+}
+
+//==================================================================
+void DemoMain::DrawDemo(ImmGL& immgl)
+{
+    // draw the road
+    drawRoad(immgl, 0, SLAB_MAX_N);
+
+    if (moPlaySim)
+    {
+        // draw the vehicles
+        for (auto& vh : moPlaySim->GetVehicles())
+            drawVehicle(immgl, vh);
+
+        // draw the debug stuff
+        if (_demoMain.mShowDebugDraw)
+            debugDraw(immgl, moPlaySim->GetVehicles()[0]);
+    }
+}
+
+//==================================================================
+Float3 DemoMain::GetOurVehiclePos() const
+{
+    if (moPlaySim)
+        return moPlaySim->GetVehicles()[0].mPos;
+
+    return Float3{0.f,0.f,0.f};
+}
+
+#ifdef ENABLE_IMGUI
+//==================================================================
+static inline auto guiHeader = []( const std::string &name, bool defOpen )
+{
+    return ImGui::CollapsingHeader(
+                (name + "##head").c_str(),
+                defOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0);
+};
+
+//==================================================================
+void DemoMain::handleTrainUI()
+{
+    // handle training
+    if (moTrainer)
+    {
+        if (ImGui::Button("Stop Training"))
+        {
+            moTrainer->ReqShutdown();
+        }
+        ImGui::SameLine();
+        ImGui::Text("Training epoch:%zu...", moTrainer->GetCurEpochN());
+    }
+    else
+    {
+        if (ImGui::Button("Start Training"))
+        {
+            CS_Trainer::Params par;
+            par.maxEpochsN = 5000;
+
+            par.evalBrainFn = [](const CS_BrainBase &brain, std::atomic<bool>& reqShutdown)
+            {
+                double totCost = 0;
+                // run a simulation for each variant
+                for (size_t sidx=0; sidx < SIM_TRAIN_VARIANTS_N; ++sidx)
+                {
+                    const auto seed = (uint32_t)(sidx + 1);
+
+                    // create a simulation for the given scenario and brain
+                    auto oSim = std::make_unique<Simulation>(seed, &brain);
+
+                    // run to completion (includes timeout)
+                    while (oSim->IsSimRunning() && !reqShutdown)
+                        oSim->AnimateSim(FRAME_DT);
+
+                    totCost += 1.0 / (oSim->GetSimScore() + 1.0);
+                }
+
+                return totCost / SIM_TRAIN_VARIANTS_N;
+            };
+
+            // create the trainer
+            moTrainer = std::make_unique<CS_Trainer>(
+                par,
+                CS_ModelFactory::CreateTrain(
+                    mCurModelIdx,    // model index (just one for now)
+                    Vehicle::SENS_N, // number of sensors (brain's input)
+                    Vehicle::CTRL_N) // number of controls (brain's output)
+            );
+
+            mLastEpoch = 0;
+            mLastEpochTimeS = GetSteadyTimeS();
+        }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth( 150);
+        if (ImGui::BeginCombo("##Model", CS_ModelFactory::GetModelName(mCurModelIdx).c_str()))
+        {
+            const auto n = CS_ModelFactory::GetModelsN();
+            for (size_t i=0; i < n; ++i)
+            {
+                const bool isSelected = (mCurModelIdx == i);
+                if (ImGui::Selectable(CS_ModelFactory::GetModelName(i).c_str(), isSelected))
+                {
+                    mCurModelIdx = i;
+                }
+                if (isSelected)
+                    ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+
+    }
+
+    if (moTrainer)
+    {
+        if (mLastEpochLenTimeS)
+        {
+            ImGui::Text("Epoch time: %.1fs", mLastEpochLenTimeS);
+            ImGui::Text("Epochs per hour: %.1f", 60*60 / mLastEpochLenTimeS);
+        }
+        else
+        {
+            ImGui::Text("Epoch time: -");
+            ImGui::Text("Epochs per hour: -");
+        }
+    }
+
+    if (guiHeader("Brains", true))
+    {
+        static size_t SHOW_TOP_N = 10;
+        if (ImGui::BeginTable("TopBrains", 5, ImGuiTableFlags_SizingStretchProp))
+        {
+            ImGui::TableHeadersRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%s","");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("Epoch");
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("Num");
+            ImGui::TableSetColumnIndex(3);
+            ImGui::Text("Cost");
+
+            // copy the latest best chromos
+            if (moTrainer)
+                moTrainer->LockViewBestChromos([this](const auto& chromos, const auto& infos)
+                {
+                    mBestChromos = chromos;
+                    mBestCInfos = infos;
+                });
+
+            for (size_t i=0; i < std::min(SHOW_TOP_N, mBestCInfos.size()); ++i)
+            {
+                const auto& ci = mBestCInfos[i];
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%zu", i);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%zu", ci.ci_epochIdx);
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("%zu", ci.ci_popIdx);
+                ImGui::TableSetColumnIndex(3);
+                ImGui::Text("%f", ci.ci_cost);
+                ImGui::TableSetColumnIndex(4);
+            }
+            ImGui::EndTable();
+        }
+    }
+}
+
+//==================================================================
+void DemoMain::handlePlayUI()
+{
+    // edit field for seed
+    if (ImGui::Button("Play Simulation"))
+    {
+        if (!mBestChromos.empty())
+        {
+            moPlayBrain = CS_ModelFactory::CreateBrain(
+                mCurModelIdx,
+                mBestChromos[0],
+                Vehicle::SENS_N,
+                Vehicle::CTRL_N);
+
+            moPlaySim = std::make_unique<Simulation>(
+                mPlaySeed,
+                moPlayBrain.get());
+        }
+    }
+    ImGui::SameLine();
+    if (mBestChromos.empty())
+    {
+        ImGui::Text("Must train first");
+    }
+    else
+    {
+        ImGui::SetNextItemWidth(100);
+        ImGui::InputScalar("Seed", ImGuiDataType_U32, &mPlaySeed);
+    }
+
+    if (moPlaySim)
     {
         ImGui::BeginTable("##simParams", 2,
                 ImGuiTableFlags_RowBg
@@ -540,19 +478,33 @@ static void handleUI(size_t frameCnt, Simulation& sim)
         };
 
         // simulation parameters
-        nameAndValue("Run Time", "%.1f s", sim.GetRunTimeS());
-        nameAndValue("Score", "%.1f", sim.GetSimScore());
-        nameAndValue("Collided", "%s", sim.HasCollided() ? "yes" : "no");
-        nameAndValue("Finished", "%s", sim.HasFinished() ? "yes" : "no");
+        nameAndValue("Run Time", "%.1f s", moPlaySim->GetRunTimeS());
+        nameAndValue("Score", "%.1f", moPlaySim->GetSimScore());
+        nameAndValue("Hit Vehicle", "%s", moPlaySim->HasHitVehicle() ? "yes" : "no");
+        nameAndValue("Hit Curb", "%s", moPlaySim->HasHitCurb() ? "yes" : "no");
+        nameAndValue("Arrived", "%s", moPlaySim->HasArrived() ? "yes" : "no");
 
         ImGui::EndTable();
-
-        if (ImGui::Button("Restart"))
-        {
-            sim = {0};
-            rebuild = true;
-        }
     }
+}
+
+//==================================================================
+void DemoMain::HandleUI(size_t frameCnt)
+{
+    if ( guiHeader( "Display", true ) )
+    {
+        ImGui::SliderFloat( "Camera FOV", &_sPar.DISP_CAM_FOV_DEG, 10.f, 120.f );
+        ImGui::SliderFloat( "Camera Dist", &_sPar.DISP_CAM_DIST, 0.f, DISP_CAM_FAR/10 );
+        ImGui::SliderFloat2( "Camera Pitch/Yaw", &_sPar.DISP_CAM_PY_ANGS[0], -180, 180 );
+        ImGui::NewLine();
+        ImGui::Checkbox("Debug Draw", &mShowDebugDraw);
+    }
+
+    if (guiHeader("Train", true))
+        handleTrainUI();
+
+    if (guiHeader("Play Simulation", true))
+        handlePlayUI();
 }
 #endif
 
@@ -566,10 +518,6 @@ int main( int argc, char *argv[] )
 
     ImmGL immgl;
 
-    static constexpr auto FRAME_DT = 1.f / 60.f;
-
-    Simulation sim(0);
-
     // begin the main/rendering loop
     for (size_t frameCnt=0; ; ++frameCnt)
     {
@@ -578,7 +526,7 @@ int main( int argc, char *argv[] )
             break;
 
 #ifdef ENABLE_IMGUI
-        app.DrawMainUIWin( [&]() { handleUI(frameCnt, sim); } );
+        app.DrawMainUIWin( [&]() { _demoMain.HandleUI(frameCnt); } );
 #endif
         glViewport(0, 0, app.GetDispSize()[0], app.GetDispSize()[1]);
         glClearColor( 0, 0, 0, 0 );
@@ -598,6 +546,12 @@ int main( int argc, char *argv[] )
             m = glm::translate( m, Float3(0.0f, -_sPar.DISP_CAM_HEIGHT, -_sPar.DISP_CAM_DIST) );
             m = glm::rotate( m, DEG2RAD(_sPar.DISP_CAM_PY_ANGS[0]), Float3(1, 0, 0) );
             m = glm::rotate( m, DEG2RAD(_sPar.DISP_CAM_PY_ANGS[1]), Float3(0, 1, 0) );
+
+            // follow our vehicle
+            m = glm::translate(m, Float3(
+                        0.0f,
+                        0.0f,
+                        -_demoMain.GetOurVehiclePos()[2]));
             return m;
         }();
 
@@ -616,18 +570,9 @@ int main( int argc, char *argv[] )
         // set the obj -> proj matrix
         immgl.SetMtxPS( proj_obj );
 
-        // draw the road
-        drawRoad(immgl, 0, SLAB_MAX_N);
+        _demoMain.AnimateDemo(FRAME_DT);
 
-        sim.AnimateSim(FRAME_DT);
-
-        // draw the vehicles
-        for (auto& vh : sim.GetVehicles())
-            DrawVehicle(immgl, vh);
-
-        // draw the debug stuff
-        if (_sShowDebugDraw)
-            debugDraw(immgl, sim.GetVehicles()[0]);
+        _demoMain.DrawDemo(immgl);
 
         immgl.FlushStdList();
 
