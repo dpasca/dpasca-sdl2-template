@@ -54,22 +54,24 @@ static auto hybridCrossOver = [](auto& rng, auto&dist, const auto& a, const auto
     return singlePointCrossOver(rng, dist, intermediate, a);
 };
 #endif
-std::pair<float, float> calcMeanAndStddev(const std::vector<float>& vec)
+static auto calcMeanAndStddev = [](const auto& vec)
 {
     float sum = 0.0f;
     float sum_squared = 0.0f;
-    for (auto x : vec)
+    const auto* p = vec. template GetChromoData<CS_M1_ChromoScalar>();
+    const auto n = vec. template GetChromoDataSize<CS_M1_ChromoScalar>();
+    for (size_t i=0; i < n; ++i)
     {
+        const auto x = p[i];
         sum += x;
         sum_squared += x * x;
     }
-    const auto n = (float)vec.size();
     const auto mean = sum / n;
     const auto dcar = (sum_squared / n) - (mean * mean);
     const auto std_dev = sqrt(dcar);
 
-    return {mean, std_dev};
-}
+    return std::make_pair(mean, std_dev);
+};
 
 static auto mutateNormalDist = [](auto& rng, const auto& vec, float rate)
 {
@@ -77,10 +79,12 @@ static auto mutateNormalDist = [](auto& rng, const auto& vec, float rate)
     const auto [mean, stddev] = calcMeanAndStddev(vec);
     std::normal_distribution<float> nor(mean, stddev);
     std::uniform_real_distribution<float> uni(0.0, 1.0);
-    for (auto& x : newVec)
+    auto* p = newVec. template GetChromoData<CS_M1_ChromoScalar>();
+    const auto n = newVec. template GetChromoDataSize<CS_M1_ChromoScalar>();
+    for (size_t i=0; i < n; ++i)
     {
         if (uni(rng) < rate)
-            x += (CS_SCALAR)nor(rng);
+            p[i] += (CS_SCALAR)nor(rng);
     }
     return newVec;
 };
@@ -177,8 +181,8 @@ public:
         // mutation function
         auto mutateChromo = [&](const CS_Chromo &chromo)
         {
-            return mutateScaled(rng, chromo, static_cast<CS_SCALAR>(0.2));
-            //return mutateNormalDist(rng, chromo, 0.1);
+            //return mutateScaled(rng, chromo, (CS_SCALAR)0.2);
+            return mutateNormalDist(rng, chromo, (CS_SCALAR)0.1);
         };
 
         std::vector<CS_Chromo> newChromos;

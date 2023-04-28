@@ -33,8 +33,8 @@ struct DemoParams
 {
     float       DISP_CAM_FOV_DEG    = 50.f;       // field of view
     float       DISP_CAM_DIST       = 12;
-    float       DISP_CAM_HEIGHT     = 4;
-    Float2      DISP_CAM_PY_ANGS    = {20.f, 0.f};
+    float       DISP_CAM_HEIGHT     = 5;
+    Float2      DISP_CAM_PY_ANGS    = {10.f, 0.f};
 } _sPar;
 
 //==================================================================
@@ -54,9 +54,16 @@ public:
     std::vector<CS_ChromoInfo>      mBestCInfos;
 
     // simulation to play/test
+    bool                            mPlayEnabled = true;
     uint32_t                        mPlaySeed = 0;
     std::unique_ptr<Simulation>     moPlaySim;
     std::unique_ptr<CS_BrainBase>   moPlayBrain;
+
+    DemoMain()
+    {
+        // start to train right away
+        doStartTraining();
+    }
 
     void AnimateDemo(float dt);
     void DrawDemo(ImmGL& immgl);
@@ -68,6 +75,7 @@ private:
     void handleTrainUI();
     void handlePlayUI();
 
+    void doStartTraining();
     void animateTrainer();
 } _demoMain;
 
@@ -218,6 +226,21 @@ static void drawRoad(
 void DemoMain::AnimateDemo(float dt)
 {
     // animate the play/display simulation
+    if (mPlayEnabled && (!moPlaySim || !moPlaySim->IsSimRunning()))
+    {
+        if (!mBestChromos.empty())
+        {
+            moPlayBrain = CS_ModelFactory::CreateBrain(
+                mCurModelIdx,
+                mBestChromos[0],
+                Vehicle::SENS_N,
+                Vehicle::CTRL_N);
+
+            moPlaySim = std::make_unique<Simulation>(
+                mPlaySeed,
+                moPlayBrain.get());
+        }
+    }
     if (moPlaySim)
         moPlaySim->AnimateSim(dt);
 
@@ -285,6 +308,46 @@ Float3 DemoMain::GetOurVehiclePos() const
     return Float3{0.f,0.f,0.f};
 }
 
+//==================================================================
+void DemoMain::doStartTraining()
+{
+    CS_Trainer::Params par;
+    par.maxEpochsN = 10000;
+
+    par.evalBrainFn = [](const CS_BrainBase &brain, std::atomic<bool>& reqShutdown)
+    {
+        double totCost = 0;
+        // run a simulation for each variant
+        for (size_t sidx=0; sidx < SIM_TRAIN_VARIANTS_N; ++sidx)
+        {
+            const auto seed = (uint32_t)(sidx + 0);
+
+            // create a simulation for the given scenario and brain
+            auto oSim = std::make_unique<Simulation>(seed, &brain);
+
+            // run to completion (includes timeout)
+            while (oSim->IsSimRunning() && !reqShutdown)
+                oSim->AnimateSim(FRAME_DT);
+
+            totCost += 1.0 / (oSim->GetSimScore() + 1.0);
+        }
+
+        return totCost / SIM_TRAIN_VARIANTS_N;
+    };
+
+    // create the trainer
+    moTrainer = std::make_unique<CS_Trainer>(
+        par,
+        CS_ModelFactory::CreateTrain(
+            mCurModelIdx,    // model index (just one for now)
+            Vehicle::SENS_N, // number of sensors (brain's input)
+            Vehicle::CTRL_N) // number of controls (brain's output)
+    );
+
+    mLastEpoch = 0;
+    mLastEpochTimeS = GetSteadyTimeS();
+}
+
 #ifdef ENABLE_IMGUI
 //==================================================================
 static inline auto guiHeader = []( const std::string &name, bool defOpen )
@@ -305,50 +368,18 @@ void DemoMain::handleTrainUI()
             moTrainer->ReqShutdown();
         }
         ImGui::SameLine();
-        ImGui::Text("Training epoch:%zu...", moTrainer->GetCurEpochN());
+        ImGui::Text("Variants:%zu", SIM_TRAIN_VARIANTS_N);
+        ImGui::SameLine();
+        ImGui::Text("Epoch:%zu...", moTrainer->GetCurEpochN());
     }
     else
     {
         if (ImGui::Button("Start Training"))
         {
-            CS_Trainer::Params par;
-            par.maxEpochsN = 5000;
-
-            par.evalBrainFn = [](const CS_BrainBase &brain, std::atomic<bool>& reqShutdown)
-            {
-                double totCost = 0;
-                // run a simulation for each variant
-                for (size_t sidx=0; sidx < SIM_TRAIN_VARIANTS_N; ++sidx)
-                {
-                    const auto seed = (uint32_t)(sidx + 1);
-
-                    // create a simulation for the given scenario and brain
-                    auto oSim = std::make_unique<Simulation>(seed, &brain);
-
-                    // run to completion (includes timeout)
-                    while (oSim->IsSimRunning() && !reqShutdown)
-                        oSim->AnimateSim(FRAME_DT);
-
-                    totCost += 1.0 / (oSim->GetSimScore() + 1.0);
-                }
-
-                return totCost / SIM_TRAIN_VARIANTS_N;
-            };
-
-            // create the trainer
-            moTrainer = std::make_unique<CS_Trainer>(
-                par,
-                CS_ModelFactory::CreateTrain(
-                    mCurModelIdx,    // model index (just one for now)
-                    Vehicle::SENS_N, // number of sensors (brain's input)
-                    Vehicle::CTRL_N) // number of controls (brain's output)
-            );
-
-            mLastEpoch = 0;
-            mLastEpochTimeS = GetSteadyTimeS();
+            doStartTraining();
         }
         ImGui::SameLine();
-        ImGui::SetNextItemWidth( 150);
+        ImGui::SetNextItemWidth(150);
         if (ImGui::BeginCombo("##Model", CS_ModelFactory::GetModelName(mCurModelIdx).c_str()))
         {
             const auto n = CS_ModelFactory::GetModelsN();
@@ -383,7 +414,7 @@ void DemoMain::handleTrainUI()
 
     if (guiHeader("Brains", true))
     {
-        static size_t SHOW_TOP_N = 10;
+        static size_t SHOW_TOP_N = 5;
         if (ImGui::BeginTable("TopBrains", 5, ImGuiTableFlags_SizingStretchProp))
         {
             ImGui::TableHeadersRow();
@@ -427,31 +458,10 @@ void DemoMain::handleTrainUI()
 void DemoMain::handlePlayUI()
 {
     // edit field for seed
-    if (ImGui::Button("Play Simulation"))
-    {
-        if (!mBestChromos.empty())
-        {
-            moPlayBrain = CS_ModelFactory::CreateBrain(
-                mCurModelIdx,
-                mBestChromos[0],
-                Vehicle::SENS_N,
-                Vehicle::CTRL_N);
-
-            moPlaySim = std::make_unique<Simulation>(
-                mPlaySeed,
-                moPlayBrain.get());
-        }
-    }
+    ImGui::Checkbox("Auto Play", &mPlayEnabled);
     ImGui::SameLine();
-    if (mBestChromos.empty())
-    {
-        ImGui::Text("Must train first");
-    }
-    else
-    {
-        ImGui::SetNextItemWidth(100);
-        ImGui::InputScalar("Seed", ImGuiDataType_U32, &mPlaySeed);
-    }
+    ImGui::SetNextItemWidth(100);
+    ImGui::InputScalar("Seed", ImGuiDataType_U32, &mPlaySeed);
 
     if (moPlaySim)
     {
@@ -511,7 +521,7 @@ void DemoMain::HandleUI(size_t frameCnt)
 //==================================================================
 int main( int argc, char *argv[] )
 {
-    MinimalSDLApp app( argc, argv, 1024, 768, 0
+    MinimalSDLApp app( argc, argv, 1200, 750, 0
                     | MinimalSDLApp::FLAG_OPENGL
                     | MinimalSDLApp::FLAG_RESIZABLE
                     );

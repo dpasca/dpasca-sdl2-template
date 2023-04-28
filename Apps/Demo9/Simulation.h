@@ -44,13 +44,13 @@ static constexpr auto VH_WIDTH          = 1.0f; // meters
 static constexpr auto VH_LENGTH         = 2.0f; // meters
 static constexpr auto VH_ELEVATION      = 0.5f; // meters
 static constexpr auto VH_YAW_MAX_RAD    = DEG2RAD(30.f); // radians
-static constexpr auto VH_PROBE_RADIUS   = VH_LENGTH * 3;
+static constexpr auto VH_PROBE_RADIUS   = VH_LENGTH * 5;
 
 static constexpr auto NPC_SPAWN_N       = (size_t)150;
 static constexpr auto NPC_SPEED_MIN_MS  = 4.0f; // meters/second
 static constexpr auto NPC_SPEED_MAX_MS  = 8.0f; // meters/second
 
-static constexpr auto SIM_TRAIN_VARIANTS_N = 5;
+static constexpr auto SIM_TRAIN_VARIANTS_N = 10;
 
 //==================================================================
 static auto attenuateVal = [](auto val, auto dt, auto att)
