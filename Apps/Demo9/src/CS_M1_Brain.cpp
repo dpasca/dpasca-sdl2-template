@@ -125,10 +125,14 @@ public:
                outs.size() == mLs.back().Wei.size_cols());
 
         // define the activation function
-        //auto sigm_vec = [](auto& v) { for (auto& x : v) x = T(1.0) / (T(1.0) + exp(-x)); };
-        //auto tanh_vec = [](auto& v) { for (auto& x : v) x = tanh(x); };
-        auto relu_vec = [](auto& v) { for (auto& x : v) x = std::max(T(0), x); };
-        //auto leaky_relu_vec = [](auto& v) { for (auto& x : v) x = std::max(T(0.01)*x, x); };
+        auto activ_vec =
+        /* sigm       */ //[](auto& v) { for (auto& x : v) x = T(1.0) / (T(1.0) + exp(-x)); };
+        /* tanh       */ //[](auto& v) { for (auto& x : v) x = tanh(x); };
+        /* relu       */ //[](auto& v) { for (auto& x : v) x = std::max(T(0), x); };
+        /* leaky_relu */ //[](auto& v) { for (auto& x : v) x = std::max(T(0.01)*x, x); };
+        /* gelu       */ [](auto& v) { for (auto& x : v) x = x * T(0.5) * (T(1.0) + erf(x / sqrt(T(2.0)))); };
+
+        //auto activ_vec = gelu_vec;
 
         auto* pTempMem0 = (T*)alloca(mMaxLenVecN * sizeof(T));
         auto* pTempMem1 = (T*)alloca(mMaxLenVecN * sizeof(T));
@@ -137,7 +141,7 @@ public:
             Vec tmp0(pTempMem0, mLs[0].Wei.size_cols());
             CSM_Vec_mul_Mat(tmp0, ins, mLs[0].Wei);
             tmp0 += mLs[0].Bia;
-            relu_vec(tmp0);
+            activ_vec(tmp0);
         }
         for (size_t i=1; i < mLs.size()-1; ++i)
         {
@@ -146,7 +150,7 @@ public:
             Vec tmp1(pTempMem1, l.Wei.size_cols());
             CSM_Vec_mul_Mat(tmp1, tmp0, l.Wei);
             tmp1 += l.Bia;
-            relu_vec(tmp1);
+            activ_vec(tmp1);
             std::swap(pTempMem0, pTempMem1);
         }
         {
@@ -154,7 +158,7 @@ public:
             Vec tmp0(pTempMem0, mLs[mLs.size()-2].Wei.size_cols());
             CSM_Vec_mul_Mat(outs, tmp0, l.Wei);
             outs += l.Bia;
-            relu_vec(outs);
+            activ_vec(outs);
         }
     }
 };
