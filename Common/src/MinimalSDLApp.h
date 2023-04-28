@@ -26,6 +26,7 @@ class MinimalSDLApp
     double          mLastFrameTimeS {};
 
     bool            mUseSWRender    {};
+    bool            mDisableVSync   {};
     size_t          mExitFrameN {};
     std::string     mSaveSShotPFName;
 

@@ -86,10 +86,15 @@ Options
         else if ( isparam("--autoexit_delay") )
         {
             mExitFrameN = (size_t)std::stoi( nextParam() );
+            mDisableVSync = true; // also disables vsync
         }
         else if ( isparam("--autoexit_savesshot") )
         {
             mSaveSShotPFName = nextParam();
+        }
+        else if ( isparam("--disable_vsync") )
+        {
+            mDisableVSync = true;
         }
     }
 }
@@ -269,8 +274,8 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
         glGetIntegerv( GL_MINOR_VERSION, &mUsingGLVersion_Minor );
 
         logInfo(fmt::format("Using OpenGL {}.{}", mUsingGLVersion_Major, mUsingGLVersion_Minor));
-        
-        SDL_GL_SetSwapInterval( mExitFrameN ? 0 : 1 );
+
+        SDL_GL_SetSwapInterval( mDisableVSync ? 0 : 1 );
     }
 #endif
 
@@ -293,7 +298,7 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
     {
         mpRenderer = SDL_CreateRenderer( mpWindow, -1, 0
                         | SDL_RENDERER_ACCELERATED
-                        | (mExitFrameN ? 0 : SDL_RENDERER_PRESENTVSYNC) );
+                        | (mDisableVSync ? 0 : SDL_RENDERER_PRESENTVSYNC) );
 
         if ( !mpRenderer )
             exitErrSDL( "SDL_CreateRenderer failed" );
@@ -422,7 +427,7 @@ void MinimalSDLApp::EndFrame()
 #endif
 
     // rudimentary frame sync, only if we're not in auto-exit mode
-    if ( !mExitFrameN )
+    if ( !mDisableVSync )
     {
         const auto curTimeS = getSteadyTimeSecs();
 
