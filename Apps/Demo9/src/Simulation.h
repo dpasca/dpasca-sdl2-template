@@ -29,12 +29,15 @@ inline constexpr float DEG2RAD( float deg )
 }
 
 // road params
-static constexpr auto SLAB_DEPTH = 1.f; // meters
-static constexpr auto SLAB_WIDTH = 16.f; // meters
-static constexpr auto SLAB_MAX_N = 1000; // meters
-static constexpr auto SLAB_STA_IDX = 4;
-static constexpr auto SLAB_END_IDX = SLAB_MAX_N - 10;
-static constexpr auto SLAB_LANES_N = 4;
+static constexpr auto ROAD_LEN_M = 1000.f; // meters
+static constexpr auto ROAD_LANES_N = 5;
+static constexpr auto ROAD_LANE_WIDTH = 3.5f; // meters
+
+static constexpr auto SLAB_DEPTH = 2.f; // meters
+static constexpr auto SLAB_WIDTH = ROAD_LANE_WIDTH * ROAD_LANES_N;
+static constexpr auto SLAB_MAX_N   = (size_t)(ROAD_LEN_M        / SLAB_DEPTH);
+static constexpr auto SLAB_STA_IDX = (size_t)(              10  / SLAB_DEPTH);
+static constexpr auto SLAB_END_IDX = (size_t)((ROAD_LEN_M - 10) / SLAB_DEPTH);
 
 // vehicle params
 static constexpr auto VH_MAX_SPEED_MS   = 40.f; // meters/second
@@ -47,11 +50,12 @@ static constexpr auto VH_ELEVATION      = 0.5f; // meters
 static constexpr auto VH_YAW_MAX_RAD    = DEG2RAD(45.f); // radians
 static constexpr auto VH_PROBE_RADIUS   = VH_LENGTH * 10;
 
-static constexpr auto NPC_SPAWN_N       = (size_t)50;
+static constexpr auto NPC_SPAWN_N       = (size_t)70;
 static constexpr auto NPC_SPEED_MIN_MS  = 4.0f; // meters/second
 static constexpr auto NPC_SPEED_MAX_MS  = 8.0f; // meters/second
+static constexpr auto NPC_STRANDED_P    = 0.02f; // probability of being stranded
 
-static constexpr auto SIM_TRAIN_VARIANTS_N = 10;
+static constexpr auto SIM_TRAIN_VARIANTS_N = (size_t)10;
 
 //==================================================================
 static auto attenuateVal = [](auto val, auto dt, auto att)
@@ -317,7 +321,7 @@ public:
             Vehicle vh;
             vh.mPos[0] = 0;
             vh.mPos[1] = VH_ELEVATION;
-            vh.mPos[2] = -4 * SLAB_DEPTH;
+            vh.mPos[2] = SLAB_STA_IDX * -SLAB_DEPTH;
             vh.mIsNPC = false;
             mVehicles.push_back(vh);
         }
@@ -329,20 +333,30 @@ public:
         // generate some NPC vehicles
         for (size_t i=0; i < NPC_SPAWN_N; ++i)
         {
-            // random x at center of each lane, based on SLAB_LANES_N
-            const auto laneW = SLAB_WIDTH / SLAB_LANES_N;
-            const auto lane = dist(gen) * (SLAB_LANES_N-1);
-            const auto x = lane * laneW - SLAB_WIDTH * 0.5f + laneW * 0.5f;
-
-            // z from slab 0 to SLAB_MAX_N-1
-            const auto z = dist(gen) * (SLAB_MAX_N-1) * -SLAB_DEPTH;
-
             Vehicle vh;
-            vh.mPos[0] = x;
-            vh.mPos[1] = VH_ELEVATION;
-            vh.mPos[2] = z;
-            vh.mSpeed = glm::mix(NPC_SPEED_MIN_MS, NPC_SPEED_MAX_MS, dist(gen));
             vh.mIsNPC = true;
+
+            // common height
+            vh.mPos[1] = VH_ELEVATION;
+            // random distance for the extent of the road
+            vh.mPos[2] = dist(gen) * -ROAD_LEN_M;
+
+            if (dist(gen) < NPC_STRANDED_P)
+            {
+                // right att he edge of the road, left or right
+                vh.mPos[0] = (dist(gen) < 0.5f) ? -SLAB_WIDTH * 0.5f : SLAB_WIDTH * 0.5f;
+                vh.mSpeed = 0; // speed == 0 -> stranded
+            }
+            else
+            {
+                // random x at center of each lane, based on ROAD_LANES_N
+                const auto laneW = SLAB_WIDTH / ROAD_LANES_N;
+                const auto lane = floor( dist(gen) * (ROAD_LANES_N-1) + 0.5f );
+                const auto x = lane * laneW - SLAB_WIDTH * 0.5f + laneW * 0.5f;
+
+                vh.mPos[0] = x;
+                vh.mSpeed = glm::mix(NPC_SPEED_MIN_MS, NPC_SPEED_MAX_MS, dist(gen));
+            }
             mVehicles.push_back(vh);
         }
     }

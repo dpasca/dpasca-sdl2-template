@@ -158,9 +158,15 @@ static void drawVehicle(ImmGL& immgl, const Vehicle& vh)
         IFloat3{x1, vh.mPos[1], z1},
     };
 
+    static constexpr auto OWN_COL          = IColor4{1.0f,0.0f,0.0f,1.f};
+    static constexpr auto NPC_COL          = IColor4{0.0f,0.0f,1.0f,1.f};
+    static constexpr auto NPC_STRANDED_COL = IColor4{0.5f,0.0f,1.0f,1.f};
+
+    auto isStranded = vh.mSpeed < 0.001f;
+
     const auto baseCol = vh.mIsNPC
-        ? IColor4{0.0f,0.0f,1.0f,1.f}
-        : IColor4{1.0f,0.0f,0.0f,1.f};
+        ? (isStranded ? NPC_STRANDED_COL : NPC_COL)
+        : OWN_COL;
 
     const auto frontCol = IColor4{
         baseCol[0] * 0.7f,
@@ -197,6 +203,14 @@ static void drawRoad(
     static IColor4 staCol = { 0.2f, 0.8f, 0.2f, 1.f };
     static IColor4 endCol = { 0.8f, 0.2f, 0.2f, 1.f };
 
+    static IColor4 ROAD_COL_LANEVSTRIP = { 0.9f, 0.9f, 0.9f, 1.f };
+
+    const auto laneW = SLAB_WIDTH / (float)ROAD_LANES_N;
+    const auto vstripW = laneW * 0.1f;
+
+    const auto ROAD_Y = 0.0f;
+    const auto VSTRIP_Y = 0.01f;
+
     for (size_t idx=idxSta; idx < idxEnd; ++idx)
     {
         const auto x0 = -SLAB_WIDTH * 0.5f;
@@ -205,10 +219,10 @@ static void drawRoad(
         const auto z1 = (float)(idx+1) * -SLAB_DEPTH;
 
         const std::array<IFloat3,4> vpos = {
-            IFloat3{x0, 0.f, z0},
-            IFloat3{x1, 0.f, z0},
-            IFloat3{x0, 0.f, z1},
-            IFloat3{x1, 0.f, z1},
+            IFloat3{x0, ROAD_Y, z0},
+            IFloat3{x1, ROAD_Y, z0},
+            IFloat3{x0, ROAD_Y, z1},
+            IFloat3{x1, ROAD_Y, z1},
         };
 
         const auto col =
@@ -219,6 +233,25 @@ static void drawRoad(
                     : baseCols[idx % std::size(baseCols)];
 
         immgl.DrawQuad(vpos, col);
+
+        if (idx & 1)
+        {
+            // vstrips that divide the lanes
+            for (size_t i=1; i < ROAD_LANES_N; ++i)
+            {
+                const auto vs_x0 = x0 + laneW * (float)i - vstripW * 0.5f;
+                const auto vs_x1 = vs_x0 + vstripW;
+
+                const std::array<IFloat3,4> vpos = {
+                    IFloat3{vs_x0, VSTRIP_Y, z0},
+                    IFloat3{vs_x1, VSTRIP_Y, z0},
+                    IFloat3{vs_x0, VSTRIP_Y, z1},
+                    IFloat3{vs_x1, VSTRIP_Y, z1},
+                };
+
+                immgl.DrawQuad(vpos, ROAD_COL_LANEVSTRIP);
+            }
+        }
     }
 }
 
