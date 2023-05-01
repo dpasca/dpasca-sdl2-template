@@ -143,6 +143,10 @@ private:
                 }
             }
 
+            // if we're shutting down, then exit before calling OnEpochEnd()
+            if (mShutdownReq)
+                break;
+
             // generate the new chromosomes
             vector<CS_ChromoInfo> infos;
             infos.resize(popN);
