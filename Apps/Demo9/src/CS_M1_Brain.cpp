@@ -19,6 +19,8 @@
 #include "CS_M1_Types.h"
 #include "CS_M1_Brain.h"
 
+//#define USE_TWO_HIDDEN_LAYERS
+
 using namespace std;
 
 //==================================================================
@@ -166,20 +168,31 @@ public:
 template class SimpleNN<CS_SCALAR>;
 
 //==================================================================
+static std::vector<size_t> makeLayerNs(size_t insN, size_t outsN)
+{
+#ifdef USE_TWO_HIDDEN_LAYERS
+    const size_t hid1N = calcHiddenN1(insN, outsN);
+    const size_t hid2N = calcHiddenN2(insN, outsN);
+    return std::vector<size_t>{insN, hid1N, hid2N, outsN};
+#else
+    const size_t hidN = calcHiddenN1(insN, outsN);
+    return std::vector<size_t>{insN, hidN, outsN};
+#endif
+}
+
+//==================================================================
 CS_M1_Brain::CS_M1_Brain(const CS_Chromo& chromo, size_t insN, size_t outsN)
     : CS_BrainBase(chromo, insN, outsN)
 {
-    const size_t hid1N = calcHiddenN1(insN, outsN);
-    const size_t hid2N = calcHiddenN2(insN, outsN);
-    moNN = std::make_unique<SimpleNN<CS_SCALAR>>(chromo, std::vector<size_t>{insN, hid1N, hid2N, outsN});
+    const auto layerNs = makeLayerNs(insN, outsN);
+    moNN = std::make_unique<SimpleNN<CS_SCALAR>>(chromo, layerNs);
 }
 //
 CS_M1_Brain::CS_M1_Brain(uint32_t seed, size_t insN, size_t outsN)
     : CS_BrainBase(seed, insN, outsN)
 {
-    const size_t hid1N = calcHiddenN1(insN, outsN);
-    const size_t hid2N = calcHiddenN2(insN, outsN);
-    moNN = std::make_unique<SimpleNN<CS_SCALAR>>(seed, std::vector<size_t>{insN, hid1N, hid2N, outsN});
+    const auto layerNs = makeLayerNs(insN, outsN);
+    moNN = std::make_unique<SimpleNN<CS_SCALAR>>(seed, layerNs);
 }
 
 //
