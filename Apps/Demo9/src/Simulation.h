@@ -54,7 +54,8 @@ static constexpr auto NPC_SPAWN_N       = (size_t)70;
 static constexpr auto NPC_SPEED_MIN_MS  = 20.0f; // meters/second
 static constexpr auto NPC_SPEED_MAX_MS  = 30.0f; // meters/second
 static constexpr auto NPC_STRANDED_P    = 0.02f; // probability of being stranded
-static constexpr auto NPC_MIN_SPAWN_DIST= VH_LENGTH * 3.f;
+static constexpr auto NPC_MIN_SPAWN_R     = VH_LENGTH * 3.f;
+static constexpr auto NPC_MIN_SPAWN_ZDIST = VH_LENGTH * 10.f;
 
 
 static constexpr auto SIM_TRAIN_VARIANTS_N = (size_t)20;
@@ -303,6 +304,14 @@ probeAngLen = 2*pi / 4 (90 degrees)
 }
 
 //==================================================================
+static size_t calcLaneIdx(float x)
+{
+    const auto laneWidth = SLAB_WIDTH / (float)ROAD_LANES_N;
+    const auto laneIdx = (size_t)((x + SLAB_WIDTH * 0.5f) / laneWidth);
+    return std::clamp(laneIdx, (size_t)0, (size_t)(ROAD_LANES_N-1));
+}
+
+//==================================================================
 class Simulation
 {
     const CS_BrainBase* const mpBrain;
@@ -360,8 +369,15 @@ public:
                 vh.mSpeed = glm::mix(NPC_SPEED_MIN_MS, NPC_SPEED_MAX_MS, dist(gen));
             }
 
+            const auto& ourVh = mVehicles[0];
+
             // reject if the starting position is too close to our vehicle
-            if (glm::distance(vh.mPos, mVehicles[0].mPos) < NPC_MIN_SPAWN_DIST)
+            if (glm::distance(vh.mPos, ourVh.mPos) < NPC_MIN_SPAWN_R)
+                continue;
+
+            // if they are very close and on the same lane
+            if (std::abs(vh.mPos[2] - ourVh.mPos[2]) < NPC_MIN_SPAWN_ZDIST &&
+                    calcLaneIdx(vh.mPos[0]) == calcLaneIdx(ourVh.mPos[0]))
                 continue;
 
             mVehicles.push_back(vh);
