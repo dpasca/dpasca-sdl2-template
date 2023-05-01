@@ -29,6 +29,8 @@ static constexpr auto FRAME_DT = 1.f / 60.f;
 static constexpr float DISP_CAM_NEAR    = 0.1f;     // near plane (meters)
 static constexpr float DISP_CAM_FAR     = 1000.f;   // far plane (meters)
 
+static constexpr IColor4 SKY_COL        = { 0.5f, 0.7f, 1.f, 1.f };
+
 struct DemoParams
 {
     float       DISP_CAM_FOV_DEG    = 50.f;       // field of view
@@ -222,17 +224,34 @@ static void drawRoad(
 
         {
             // draw the outside of the road
-            const auto x0o = x0 - SLAB_DEPTH * 20;
-            const auto x1o = x1 + SLAB_DEPTH * 20;
-            const std::array<IFloat3,4> vposo = {
-                IFloat3{x0o, ROAD_OUT_Y, z0},
-                IFloat3{x1o, ROAD_OUT_Y, z0},
-                IFloat3{x0o, ROAD_OUT_Y, z1},
-                IFloat3{x1o, ROAD_OUT_Y, z1},
-            };
             const auto coe = idx & 1 ? 0.9f : 1.0f;
             const auto col = ROAD_COL_OUTSIDE * IColor4{coe,coe,coe,1.f};
-            immgl.DrawQuad(vposo, col);
+
+            // quad from left edge of screen to x0 or road
+            {
+                const auto xl = -SLAB_DEPTH * 20 * (z0+1);
+
+                const std::array<IFloat3,4> pos = {
+                    IFloat3{x0, ROAD_OUT_Y, z0},
+                    IFloat3{xl, ROAD_OUT_Y, z0},
+                    IFloat3{x0, ROAD_OUT_Y, z1},
+                    IFloat3{xl, ROAD_OUT_Y, z1},
+                };
+                immgl.DrawQuad(pos, col);
+            }
+            // quad from right edge of screen to x1 or road
+            {
+                const auto xr = SLAB_DEPTH * 20 * (z0+1);
+
+                const std::array<IFloat3,4> pos = {
+                    IFloat3{x1, ROAD_OUT_Y, z0},
+                    IFloat3{xr, ROAD_OUT_Y, z0},
+                    IFloat3{x1, ROAD_OUT_Y, z1},
+                    IFloat3{xr, ROAD_OUT_Y, z1},
+                };
+                immgl.DrawQuad(pos, col);
+            }
+
         }
 
         const std::array<IFloat3,4> vpos = {
@@ -589,7 +608,7 @@ int main( int argc, char *argv[] )
         app.DrawMainUIWin( [&]() { _demoMain.HandleUI(frameCnt); } );
 #endif
         glViewport(0, 0, app.GetDispSize()[0], app.GetDispSize()[1]);
-        glClearColor( 0, 0, 0, 0 );
+        glClearColor(SKY_COL[0], SKY_COL[1], SKY_COL[2], 1.0f);
         glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
         glEnable( GL_DEPTH_TEST );
 
