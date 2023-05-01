@@ -116,7 +116,7 @@ static auto mutateScaled = [](auto& rng, const auto& vec, float rate)
 class CS_M1_Train : public CS_TrainBase
 {
     static constexpr size_t INIT_POP_N          = 100;
-    static constexpr size_t TOP_FOR_SELECTION_N = 10;
+    static constexpr size_t TOP_FOR_SELECTION_N = 20;
     static constexpr size_t TOP_FOR_REPORT_N    = 10;
 
     // best chromos list just for display
@@ -190,11 +190,14 @@ public:
         for (size_t i=0; i < TOP_FOR_SELECTION_N; ++i)
         {
             const auto& c_i = *pSorted[i].first;
-            for (size_t j=i+1; j < TOP_FOR_SELECTION_N; ++j)
+            for (size_t j=i+2; j < TOP_FOR_SELECTION_N; ++j)
             {
                 const auto& c_j = *pSorted[j].first;
                 newChromos.push_back(              uniformCrossOver(rng, c_i, c_j) );
                 newChromos.push_back( mutateChromo(uniformCrossOver(rng, c_i, c_j)) );
+                const auto& c_k = *pSorted[j+1].first;
+                newChromos.push_back(              uniformCrossOver(rng, c_i, c_k) );
+                newChromos.push_back( mutateChromo(uniformCrossOver(rng, c_i, c_k)) );
             }
         }
 
