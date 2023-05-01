@@ -17,7 +17,7 @@
 
 struct CS_ChromoInfo
 {
-    double    ci_cost {0.0};
+    double    ci_fitness {0.0};
     size_t    ci_epochIdx {0};
     size_t    ci_popIdx {0};
 

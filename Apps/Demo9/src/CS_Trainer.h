@@ -126,8 +126,8 @@ private:
         {
             mCurEpochN = eidx;
 
-            // costs are the results of the execution
-            std::vector<std::atomic<double>> costs(popN);
+            // fitnesses are the results of the execution
+            std::vector<std::atomic<double>> fitnesses(popN);
             {
                 // create a thread for each available core
                 CS_QuickThreadPool thpool( std::thread::hardware_concurrency() + 1 );
@@ -135,10 +135,10 @@ private:
                 // for each member of the population...
                 for (size_t pidx=0; pidx < popN && !mShutdownReq; ++pidx)
                 {
-                    thpool.AddThread([this, &chromo=chromos[pidx], &cost=costs[pidx], &par]()
+                    thpool.AddThread([this, &chromo=chromos[pidx], &fitness=fitnesses[pidx], &par]()
                     {
                         // create and evaluate the brain with the given chromosome
-                        cost = par.evalBrainFn(*moTrain->CreateBrain(chromo), mShutdownReq);
+                        fitness = par.evalBrainFn(*moTrain->CreateBrain(chromo), mShutdownReq);
                     });
                 }
             }
@@ -153,7 +153,7 @@ private:
             for (size_t pidx=0; pidx < popN; ++pidx)
             {
                 auto& ci = infos[pidx];
-                ci.ci_cost = costs[pidx];
+                ci.ci_fitness = fitnesses[pidx];
                 ci.ci_epochIdx = eidx;
                 ci.ci_popIdx = pidx;
             }

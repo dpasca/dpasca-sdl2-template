@@ -167,7 +167,7 @@ public:
 
         std::sort(pSorted.begin(), pSorted.end(), [](const auto& a, const auto& b)
         {
-            return a.second->ci_cost < b.second->ci_cost;
+            return a.second->ci_fitness > b.second->ci_fitness;
         });
 
         // update the list of best chromosomes (with a lock... we're in a different thread)
@@ -227,11 +227,11 @@ private:
         // append the new best chromos to the list
         for (size_t i=0; i < pSorted.size(); ++i)
         {
-            const auto cost = pSorted[i].second->ci_cost;
+            const auto cost = pSorted[i].second->ci_fitness;
 
             // find the insertion point in the mBestCInfos list
             auto it = std::lower_bound(mBestCInfos.begin(), mBestCInfos.end(), cost,
-                [](const auto& a, const auto& b) { return a.ci_cost < b; });
+                [](const auto& a, const auto& b) { return a.ci_fitness > b; });
 
             // insert at the given index
             if (const auto idx = (size_t)(it - mBestCInfos.begin());
@@ -245,7 +245,7 @@ private:
         mBestCInfos.resize(n);
 #ifdef DEBUG // verify that they are all sorted
         for (size_t i=1; i < mBestCInfos.size(); ++i)
-            assert(mBestCInfos[i-1].ci_cost <= mBestCInfos[i].ci_cost);
+            assert(mBestCInfos[i-1].ci_fitness <= mBestCInfos[i].ci_fitness);
 #endif
     }
 };

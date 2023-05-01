@@ -341,9 +341,9 @@ void DemoMain::animateTrainer()
             if (infos.empty())
                 printf("Training ended.");
             else
-                printf("Training ended. Best chromo: %s, cost:%f",
+                printf("Training ended. Best chromo: %s, fitness:%f",
                     infos.front().MakeStrID().c_str(),
-                    infos.front().ci_cost);
+                    infos.front().ci_fitness);
         });
 
         moTrainer.reset();
@@ -385,7 +385,7 @@ void DemoMain::doStartTraining()
 
     par.evalBrainFn = [](const CS_BrainBase &brain, std::atomic<bool>& reqShutdown)
     {
-        double totCost = 0;
+        double totFitness = 0;
         // run a simulation for each variant
         for (size_t sidx=0; sidx < SIM_TRAIN_VARIANTS_N; ++sidx)
         {
@@ -398,10 +398,10 @@ void DemoMain::doStartTraining()
             while (oSim->IsSimRunning() && !reqShutdown)
                 oSim->AnimateSim(FRAME_DT);
 
-            totCost += 1.0 / (oSim->GetSimScore() + 0.0001);
+            totFitness += oSim->GetSimScore();
         }
 
-        return totCost / SIM_TRAIN_VARIANTS_N;
+        return totFitness / SIM_TRAIN_VARIANTS_N;
     };
 
     // create the trainer
@@ -494,7 +494,7 @@ void DemoMain::handleTrainUI()
             ImGui::TableSetColumnIndex(2);
             ImGui::Text("Num");
             ImGui::TableSetColumnIndex(3);
-            ImGui::Text("Cost");
+            ImGui::Text("Fitness");
 
             // copy the latest best chromos
             if (moTrainer)
@@ -515,7 +515,7 @@ void DemoMain::handleTrainUI()
                 ImGui::TableSetColumnIndex(2);
                 ImGui::Text("%zu", ci.ci_popIdx);
                 ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%f", ci.ci_cost);
+                ImGui::Text("%f", ci.ci_fitness);
                 ImGui::TableSetColumnIndex(4);
             }
             ImGui::EndTable();
