@@ -51,11 +51,11 @@ static constexpr auto VH_YAW_MAX_RAD    = DEG2RAD(45.f); // radians
 static constexpr auto VH_PROBE_RADIUS   = VH_LENGTH * 10;
 
 static constexpr auto NPC_SPAWN_N       = (size_t)70;
-static constexpr auto NPC_SPEED_MIN_MS  = 4.0f; // meters/second
-static constexpr auto NPC_SPEED_MAX_MS  = 8.0f; // meters/second
+static constexpr auto NPC_SPEED_MIN_MS  = 20.0f; // meters/second
+static constexpr auto NPC_SPEED_MAX_MS  = 30.0f; // meters/second
 static constexpr auto NPC_STRANDED_P    = 0.02f; // probability of being stranded
 
-static constexpr auto SIM_TRAIN_VARIANTS_N = (size_t)10;
+static constexpr auto SIM_TRAIN_VARIANTS_N = (size_t)20;
 
 //==================================================================
 static auto attenuateVal = [](auto val, auto dt, auto att)
