@@ -116,7 +116,7 @@ static auto mutateScaled = [](auto& rng, const auto& vec, float rate)
 class CS_M1_Train : public CS_TrainBase
 {
     static constexpr size_t INIT_POP_N          = 100;
-    static constexpr size_t TOP_FOR_SELECTION_N = 20;
+    static constexpr size_t TOP_FOR_SELECTION_N = 10;
     static constexpr size_t TOP_FOR_REPORT_N    = 10;
 
     // best chromos list just for display
