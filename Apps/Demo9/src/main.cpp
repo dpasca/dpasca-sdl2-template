@@ -204,10 +204,12 @@ static void drawRoad(
     static IColor4 endCol = { 0.8f, 0.2f, 0.2f, 1.f };
 
     static IColor4 ROAD_COL_LANEVSTRIP = { 0.9f, 0.9f, 0.9f, 1.f };
+    static IColor4 ROAD_COL_OUTSIDE    = { 0.2f, 0.4f, 0.05f, 1.f };
 
     const auto laneW = SLAB_WIDTH / (float)ROAD_LANES_N;
     const auto vstripW = laneW * 0.1f;
 
+    const auto ROAD_OUT_Y = -0.01f;
     const auto ROAD_Y = 0.0f;
     const auto VSTRIP_Y = 0.01f;
 
@@ -217,6 +219,21 @@ static void drawRoad(
         const auto x1 =  SLAB_WIDTH * 0.5f;
         const auto z0 = (float)(idx  ) * -SLAB_DEPTH;
         const auto z1 = (float)(idx+1) * -SLAB_DEPTH;
+
+        {
+            // draw the outside of the road
+            const auto x0o = x0 - SLAB_DEPTH * 20;
+            const auto x1o = x1 + SLAB_DEPTH * 20;
+            const std::array<IFloat3,4> vposo = {
+                IFloat3{x0o, ROAD_OUT_Y, z0},
+                IFloat3{x1o, ROAD_OUT_Y, z0},
+                IFloat3{x0o, ROAD_OUT_Y, z1},
+                IFloat3{x1o, ROAD_OUT_Y, z1},
+            };
+            const auto coe = idx & 1 ? 0.9f : 1.0f;
+            const auto col = ROAD_COL_OUTSIDE * IColor4{coe,coe,coe,1.f};
+            immgl.DrawQuad(vposo, col);
+        }
 
         const std::array<IFloat3,4> vpos = {
             IFloat3{x0, ROAD_Y, z0},
