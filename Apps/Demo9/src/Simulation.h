@@ -54,6 +54,8 @@ static constexpr auto NPC_SPAWN_N       = (size_t)70;
 static constexpr auto NPC_SPEED_MIN_MS  = 20.0f; // meters/second
 static constexpr auto NPC_SPEED_MAX_MS  = 30.0f; // meters/second
 static constexpr auto NPC_STRANDED_P    = 0.02f; // probability of being stranded
+static constexpr auto NPC_MIN_SPAWN_DIST= VH_LENGTH * 3.f;
+
 
 static constexpr auto SIM_TRAIN_VARIANTS_N = (size_t)20;
 
@@ -357,6 +359,11 @@ public:
                 vh.mPos[0] = x;
                 vh.mSpeed = glm::mix(NPC_SPEED_MIN_MS, NPC_SPEED_MAX_MS, dist(gen));
             }
+
+            // reject if the starting position is too close to our vehicle
+            if (glm::distance(vh.mPos, mVehicles[0].mPos) < NPC_MIN_SPAWN_DIST)
+                continue;
+
             mVehicles.push_back(vh);
         }
     }
