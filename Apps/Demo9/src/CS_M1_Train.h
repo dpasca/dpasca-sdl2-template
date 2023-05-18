@@ -245,7 +245,7 @@ private:
         mBestCInfos.resize(n);
 #ifdef DEBUG // verify that they are all sorted
         for (size_t i=1; i < mBestCInfos.size(); ++i)
-            assert(mBestCInfos[i-1].ci_fitness <= mBestCInfos[i].ci_fitness);
+            assert(mBestCInfos[i-1].ci_fitness >= mBestCInfos[i].ci_fitness);
 #endif
     }
 };
