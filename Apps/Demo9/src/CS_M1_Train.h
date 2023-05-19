@@ -229,29 +229,14 @@ private:
 
         const auto n = std::min(TOP_FOR_REPORT_N, pSorted.size());
 
-        // append the new best chromos to the list
-        for (size_t i=0; i < pSorted.size(); ++i)
+        // replace the best chromos list with the new best chromos
+        mBestChromos.clear();
+        mBestCInfos.clear();
+        for (size_t i=0; i < n; ++i)
         {
-            const auto cost = pSorted[i].second->ci_fitness;
-
-            // find the insertion point in the mBestCInfos list
-            auto it = std::lower_bound(mBestCInfos.begin(), mBestCInfos.end(), cost,
-                [](const auto& a, const auto& b) { return a.ci_fitness > b; });
-
-            // insert at the given index
-            if (const auto idx = (size_t)(it - mBestCInfos.begin());
-                           idx < TOP_FOR_REPORT_N)
-            {
-                mBestChromos.insert(mBestChromos.begin() + (ptrdiff_t)idx, *pSorted[i].first);
-                mBestCInfos.insert(mBestCInfos.begin() + (ptrdiff_t)idx, *pSorted[i].second);
-            }
+            mBestChromos.push_back( *pSorted[i].first );
+            mBestCInfos.push_back( *pSorted[i].second );
         }
-        mBestChromos.resize(n);
-        mBestCInfos.resize(n);
-#ifdef DEBUG // verify that they are all sorted
-        for (size_t i=1; i < mBestCInfos.size(); ++i)
-            assert(mBestCInfos[i-1].ci_fitness >= mBestCInfos[i].ci_fitness);
-#endif
     }
 };
 
