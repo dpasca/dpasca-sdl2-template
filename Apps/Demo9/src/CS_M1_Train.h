@@ -186,11 +186,16 @@ public:
         };
 
         std::vector<CS_Chromo> newChromos;
+
+        // elitism: keep top 1%
+        //for (size_t i=0; i < std::max<size_t>(1, n/100); ++i)
+        //    newChromos.push_back( *pSorted[i].first );
+
         // breed the top N among each other with some mutations
         for (size_t i=0; i < TOP_FOR_SELECTION_N; ++i)
         {
             const auto& c_i = *pSorted[i].first;
-            for (size_t j=i+2; j < TOP_FOR_SELECTION_N; ++j)
+            for (size_t j=i+1; j < (TOP_FOR_SELECTION_N-1); ++j)
             {
                 const auto& c_j = *pSorted[j].first;
                 newChromos.push_back(              uniformCrossOver(rng, c_i, c_j) );
