@@ -14,7 +14,7 @@
 #include <functional>
 #include <vector>
 #include <memory>
-#include "CS_M1_Brain.h"
+#include "CS_Brain.h"
 #include "CS_TrainBase.h"
 
 //==================================================================
@@ -83,8 +83,8 @@ class CS_Trainer
     template <typename T> using unique_ptr = std::unique_ptr<T>;
 
 public:
-    using CreateBrainFnT      = function<unique_ptr<CS_M1_Brain>(const CS_Chromo&, size_t, size_t)>;
-    using EvalBrainT          = function<double (const CS_M1_Brain&, std::atomic<bool>&)>;
+    using CreateBrainFnT      = function<unique_ptr<CS_Brain>(const CS_Chromo&, size_t, size_t)>;
+    using EvalBrainT          = function<double (const CS_Brain&, std::atomic<bool>&)>;
     using OnEpochEndFnT       = function<vector<CS_Chromo>(size_t,const CS_Chromo*,const double*,size_t)>;
 
 private:

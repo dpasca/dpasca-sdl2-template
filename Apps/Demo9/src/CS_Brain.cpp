@@ -1,5 +1,5 @@
 //==================================================================
-/// CS_M1_Brain.cpp
+/// CS_Brain.cpp
 ///
 /// Created by Davide Pasca - 2023/04/28
 /// See the file "license.txt" that comes with this project for
@@ -16,7 +16,7 @@
 #include <numeric>
 
 #include "CS_Math.h"
-#include "CS_M1_Brain.h"
+#include "CS_Brain.h"
 
 using namespace std;
 
@@ -178,29 +178,29 @@ static std::vector<size_t> makeLayerNs(size_t insN, size_t outsN)
 }
 
 //==================================================================
-CS_M1_Brain::CS_M1_Brain(const CS_Chromo& chromo, size_t insN, size_t outsN)
+CS_Brain::CS_Brain(const CS_Chromo& chromo, size_t insN, size_t outsN)
 {
     const auto layerNs = makeLayerNs(insN, outsN);
     moNN = std::make_unique<SimpleNN<CS_SCALAR>>(chromo, layerNs);
 }
 //
-CS_M1_Brain::CS_M1_Brain(uint32_t seed, size_t insN, size_t outsN)
+CS_Brain::CS_Brain(uint32_t seed, size_t insN, size_t outsN)
 {
     const auto layerNs = makeLayerNs(insN, outsN);
     moNN = std::make_unique<SimpleNN<CS_SCALAR>>(seed, layerNs);
 }
 
 //
-CS_M1_Brain::~CS_M1_Brain() = default;
+CS_Brain::~CS_Brain() = default;
 
 //==================================================================
-CS_Chromo CS_M1_Brain::MakeBrainChromo() const
+CS_Chromo CS_Brain::MakeBrainChromo() const
 {
     return moNN->FlattenNN();
 }
 
 //==================================================================
-void CS_M1_Brain::AnimateBrain(const CSM_Vec& ins, CSM_Vec& outs) const
+void CS_Brain::AnimateBrain(const CSM_Vec& ins, CSM_Vec& outs) const
 {
     moNN->ForwardPass(outs, ins);
 }

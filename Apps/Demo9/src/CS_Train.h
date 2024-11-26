@@ -1,13 +1,13 @@
 //==================================================================
-/// CS_M1_Train.h
+/// CS_Train.h
 ///
 /// Created by Davide Pasca - 2023/04/28
 /// See the file "license.txt" that comes with this project for
 /// copyright info.
 //==================================================================
 
-#ifndef CS_M1_TRAIN_H
-#define CS_M1_TRAIN_H
+#ifndef CS_TRAIN_H
+#define CS_TRAIN_H
 
 #include <functional>
 #include <vector>
@@ -15,7 +15,7 @@
 #include <mutex>
 #include <random>
 #include "CS_TrainBase.h"
-#include "CS_M1_Brain.h"
+#include "CS_Brain.h"
 
 //==================================================================
 static auto uniformCrossOver = [](auto& rng, const auto& a, const auto& b)
@@ -94,7 +94,7 @@ static auto mutateScaled = [](auto& rng, const auto& vec, float rate)
 
 //==================================================================
 //==================================================================
-class CS_M1_Train : public CS_TrainBase
+class CS_Train : public CS_TrainBase
 {
     static constexpr size_t INIT_POP_N          = 100;
     static constexpr size_t TOP_FOR_SELECTION_N = 10;
@@ -106,17 +106,17 @@ class CS_M1_Train : public CS_TrainBase
     std::vector<CS_ChromoInfo> mBestCInfos;
 
 public:
-    CS_M1_Train(size_t insN, size_t outsN)
+    CS_Train(size_t insN, size_t outsN)
         : CS_TrainBase(insN, outsN)
     {
     }
 
-    ~CS_M1_Train() override = default;
+    ~CS_Train() override = default;
 
     //==================================================================
-    unique_ptr<CS_M1_Brain> CreateBrain(const CS_Chromo &chromo) override
+    unique_ptr<CS_Brain> CreateBrain(const CS_Chromo &chromo) override
     {
-        return std::make_unique<CS_M1_Brain>(chromo, mInsN, mOutsN);
+        return std::make_unique<CS_Brain>(chromo, mInsN, mOutsN);
     }
 
     //==================================================================
@@ -127,7 +127,7 @@ public:
         for (size_t i=0; i < INIT_POP_N; ++i)
         {
             // make a temp brain from a random seed
-            CS_M1_Brain brain((uint32_t)i, mInsN, mOutsN);
+            CS_Brain brain((uint32_t)i, mInsN, mOutsN);
             // store the brain's chromo
             chromos.push_back( brain.MakeBrainChromo() );
         }
