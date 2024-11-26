@@ -182,14 +182,12 @@ static std::vector<size_t> makeLayerNs(size_t insN, size_t outsN)
 
 //==================================================================
 CS_M1_Brain::CS_M1_Brain(const CS_Chromo& chromo, size_t insN, size_t outsN)
-    : CS_BrainBase(chromo, insN, outsN)
 {
     const auto layerNs = makeLayerNs(insN, outsN);
     moNN = std::make_unique<SimpleNN<CS_SCALAR>>(chromo, layerNs);
 }
 //
 CS_M1_Brain::CS_M1_Brain(uint32_t seed, size_t insN, size_t outsN)
-    : CS_BrainBase(seed, insN, outsN)
 {
     const auto layerNs = makeLayerNs(insN, outsN);
     moNN = std::make_unique<SimpleNN<CS_SCALAR>>(seed, layerNs);
@@ -209,4 +207,3 @@ void CS_M1_Brain::AnimateBrain(const CSM_Vec& ins, CSM_Vec& outs) const
 {
     moNN->ForwardPass(outs, ins);
 }
-

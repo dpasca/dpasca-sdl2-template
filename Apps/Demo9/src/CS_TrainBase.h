@@ -13,7 +13,7 @@
 #include <vector>
 #include <memory>
 #include <sstream>
-#include "CS_BrainBase.h"
+#include "CS_M1_Brain.h"
 
 struct CS_ChromoInfo
 {
@@ -48,7 +48,7 @@ public:
 
     virtual ~CS_TrainBase() = default;
 
-    virtual unique_ptr<CS_BrainBase> CreateBrain(const CS_Chromo& chromo) = 0;
+    virtual unique_ptr<CS_M1_Brain> CreateBrain(const CS_Chromo& chromo) = 0;
     virtual vector<CS_Chromo>  MakeStartChromos() = 0;
 
     virtual vector<CS_Chromo>  OnEpochEnd(
@@ -65,4 +65,3 @@ public:
 };
 
 #endif
-

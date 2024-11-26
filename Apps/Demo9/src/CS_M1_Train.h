@@ -133,7 +133,7 @@ public:
     ~CS_M1_Train() override = default;
 
     //==================================================================
-    unique_ptr<CS_BrainBase> CreateBrain(const CS_Chromo &chromo) override
+    unique_ptr<CS_M1_Brain> CreateBrain(const CS_Chromo &chromo) override
     {
         return std::make_unique<CS_M1_Brain>(chromo, mInsN, mOutsN);
     }
@@ -241,4 +241,3 @@ private:
 };
 
 #endif
-

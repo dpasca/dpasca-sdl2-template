@@ -28,7 +28,7 @@ std::string GetModelName(size_t idx)
 }
 
 //==================================================================
-std::unique_ptr<CS_BrainBase> CreateBrain(
+std::unique_ptr<CS_M1_Brain> CreateBrain(
         size_t modelIdx,
         const CS_Chromo& chromo,
         size_t insN, size_t outsN)
@@ -36,8 +36,8 @@ std::unique_ptr<CS_BrainBase> CreateBrain(
     switch (modelIdx)
     {
     case 0: return std::make_unique<CS_M1_Brain>(chromo, insN, outsN);
-    default: throw std::runtime_error("Unknown model index");
     }
+    return {};
 }
 
 //==================================================================
@@ -53,4 +53,3 @@ std::unique_ptr<CS_TrainBase> CreateTrain(
 }
 
 }
-

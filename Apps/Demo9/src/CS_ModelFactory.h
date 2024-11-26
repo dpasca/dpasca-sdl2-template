@@ -13,7 +13,7 @@
 #include <vector>
 #include <memory>
 #include "CS_TrainBase.h"
-#include "CS_BrainBase.h"
+#include "CS_M1_Brain.h"
 
 namespace CS_ModelFactory
 {
@@ -22,7 +22,7 @@ size_t GetModelsN();
 
 std::string GetModelName(size_t idx);
 
-std::unique_ptr<CS_BrainBase> CreateBrain(
+std::unique_ptr<CS_M1_Brain> CreateBrain(
         size_t modelIdx,
         const CS_Chromo& chromo,
         size_t insN, size_t outsN);
@@ -34,4 +34,3 @@ std::unique_ptr<CS_TrainBase> CreateTrain(
 }
 
 #endif
-

@@ -59,7 +59,7 @@ public:
     bool                            mPlayEnabled = true;
     uint32_t                        mPlaySeed = 0;
     std::unique_ptr<Simulation>     moPlaySim;
-    std::unique_ptr<CS_BrainBase>   moPlayBrain;
+    std::unique_ptr<CS_M1_Brain>   moPlayBrain;
 
     DemoMain()
     {
@@ -383,7 +383,7 @@ void DemoMain::doStartTraining()
     CS_Trainer::Params par;
     par.maxEpochsN = 10000;
 
-    par.evalBrainFn = [](const CS_BrainBase &brain, std::atomic<bool>& reqShutdown)
+    par.evalBrainFn = [](const CS_M1_Brain &brain, std::atomic<bool>& reqShutdown)
     {
         double totFitness = 0;
         // run a simulation for each variant
@@ -661,4 +661,3 @@ int main( int argc, char *argv[] )
 
     return 0;
 }
-

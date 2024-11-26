@@ -18,7 +18,7 @@
 #include "MathBase.h"
 #include "IncludeGL.h"
 #include "ImmGL.h"
-#include "CS_BrainBase.h"
+#include "CS_M1_Brain.h"
 
 //==================================================================
 static constexpr auto PI2 = 2*glm::pi<float>();
@@ -314,7 +314,7 @@ static size_t calcLaneIdx(float x)
 //==================================================================
 class Simulation
 {
-    const CS_BrainBase* const mpBrain;
+    const CS_M1_Brain* const mpBrain;
 
     std::vector<Vehicle> mVehicles;
 
@@ -324,7 +324,7 @@ class Simulation
     bool                 mHasArrived = false;
 
 public:
-    Simulation(uint32_t seed, const CS_BrainBase* pBrain)
+    Simulation(uint32_t seed, const CS_M1_Brain* pBrain)
         : mpBrain(pBrain)
     {
         // 0, is our vehicle
@@ -487,4 +487,3 @@ public:
 };
 
 #endif
-
