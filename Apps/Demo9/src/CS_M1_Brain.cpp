@@ -64,9 +64,9 @@ public:
     SimpleNN(const CS_Chromo& chromo, const std::vector<size_t>& layerNs)
         : SimpleNN(layerNs)
     {
-        assert(chromo.GetChromoDataSize<CS_M1_ChromoScalar>() == CalcNNSize(layerNs));
+        assert(chromo.GetChromoDataSize() == CalcNNSize(layerNs));
 
-        const auto* ptr = chromo.GetChromoData<CS_M1_ChromoScalar>();
+        const auto* ptr = chromo.GetChromoData();
         for (auto& l : mLs)
         {
             l.Wei.LoadFromMem(ptr); ptr += l.Wei.size();
@@ -96,11 +96,13 @@ public:
     CS_Chromo FlattenNN() const
     {
         CS_Chromo chromo;
-        chromo.ReserveChromoData<CS_M1_ChromoScalar>(calcNNSize());
+        chromo.mChromoData.reserve(calcNNSize());
         for (const auto& l : mLs)
         {
-            chromo.AppendChromoData(l.Wei.data(), l.Wei.size());
-            chromo.AppendChromoData(l.Bia.data(), l.Bia.size());
+            const auto* weiData = l.Wei.data();
+            const auto* biaData = l.Bia.data();
+            chromo.mChromoData.insert(chromo.mChromoData.end(), weiData, weiData + l.Wei.size());
+            chromo.mChromoData.insert(chromo.mChromoData.end(), biaData, biaData + l.Bia.size());
         }
         return chromo;
     }

@@ -15,11 +15,13 @@
 #include <utility>
 #include <memory>
 #include <cstring>
+#include "CS_Math.h"
 
 //==================================================================
 class CS_Chromo
 {
-    std::vector<uint8_t> mChromoBytes;
+public: // For now...
+    std::vector<CS_SCALAR> mChromoData;
 
 public:
     CS_Chromo() = default;
@@ -27,64 +29,35 @@ public:
     CS_Chromo CreateEmptyClone() const
     {
         CS_Chromo chromo;
-        chromo.mChromoBytes.resize(mChromoBytes.size());
+        chromo.mChromoData.resize(mChromoData.size());
         return chromo;
     }
 
-    template <typename T>
-    void SetChromoData(const T* pData, size_t size)
+    void SetChromoData(const CS_SCALAR* pData, size_t size)
     {
-        const auto sizeBytes = size * sizeof(T);
-        mChromoBytes.resize(sizeBytes);
-        memcpy(mChromoBytes.data(), pData, sizeBytes);
+        mChromoData.assign(pData, pData + size);
     }
 
-    template <typename T>
-    void SetChromoData(const T& data)
+    void SetChromoData(CS_SCALAR data)
     {
-        SetChromoData(&data, 1);
+        mChromoData.assign(1, data);
     }
 
-    template <typename T>       T* GetChromoData()        { return (T *)mChromoBytes.data(); }
-    template <typename T> const T* GetChromoData() const  { return (const T *)mChromoBytes.data(); }
+    CS_SCALAR* GetChromoData() { return mChromoData.data(); }
+    const CS_SCALAR* GetChromoData() const { return mChromoData.data(); }
 
-    template <typename T>
-    size_t GetChromoDataSize() const
-    {
-        return mChromoBytes.size() / sizeof(T);
-    }
+    size_t GetSize() const { return mChromoData.size(); }
 
-    template <typename T>
-    void AppendChromoData(const T* pData, size_t size)
-    {
-        const auto oldSizeBytes = mChromoBytes.size();
-        const auto sizeBytes = size * sizeof(T);
-        mChromoBytes.resize(oldSizeBytes + sizeBytes);
-        memcpy(mChromoBytes.data() + oldSizeBytes, pData, sizeBytes);
-    }
+    void Clear() { mChromoData.clear(); }
+    bool IsEmpty() const { return mChromoData.empty(); }
 
-    template <typename T>
-    void ReserveChromoData(size_t size)
+    std::string ToString() const
     {
-        const auto sizeBytes = size * sizeof(T);
-        mChromoBytes.reserve(sizeBytes);
-    }
-
-    // make a C++ std::hash of the vector
-    uint64_t ToHash() const
-    {
-        uint64_t h = 0;
-        for (auto& v : mChromoBytes)
-            h ^= std::hash<uint8_t>()(v) + 0x9e3779b9 + (h << 6) + (h >> 2);
-        return h;
-    }
-    std::string ToHashHex() const
-    {
-        std::stringstream ss;
-        ss << std::hex << ToHash();
-        return ss.str();
+        std::ostringstream oss;
+        for (const auto& val : mChromoData)
+            oss << val << " ";
+        return oss.str();
     }
 };
 
 #endif
-

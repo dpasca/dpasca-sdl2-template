@@ -21,45 +21,26 @@
 //==================================================================
 static auto uniformCrossOver = [](auto& rng, const auto& a, const auto& b)
 {
-    using T = CS_M1_ChromoScalar;
-
     auto res = a.CreateEmptyClone();
-    auto* pRes =  res. template GetChromoData<T>();
-    const auto* pA = a. template GetChromoData<T>();
-    const auto* pB = b. template GetChromoData<T>();
-    const auto n = a. template GetChromoDataSize<T>();
+    auto* pRes = res.GetChromoData();
+    const auto* pA = a.GetChromoData();
+    const auto* pB = b.GetChromoData();
+    const auto n = a.GetSize();
+
     std::uniform_real_distribution<double> uni(0.0, 1.0);
     for (size_t i=0; i < n; ++i)
         pRes[i] = uni(rng) < 0.5 ? pA[i] : pB[i];
 
     return res;
 };
-#if 0
-//
-static auto singlePointCrossOver = [](auto& rng, auto dist, const auto& a, const auto& b)
-{
-    using T = CS_M1_ChromoScalar;
-    T res(a.size());
-    const auto split = std::min( (size_t)(dist(rng) * a.size()), a.size()-1 );
 
-    for (size_t i=0;     i < split;    ++i) res[i] = a[i];
-    for (size_t i=split; i < a.size(); ++i) res[i] = b[i];
-
-    return res;
-};
-//
-static auto hybridCrossOver = [](auto& rng, auto&dist, const auto& a, const auto& b)
-{
-    const auto intermediate = uniformCrossOver(rng, a, b);
-    return singlePointCrossOver(rng, dist, intermediate, a);
-};
-#endif
 static auto calcMeanAndStddev = [](const auto& vec)
 {
     float sum = 0.0f;
     float sum_squared = 0.0f;
-    const auto* p = vec. template GetChromoData<CS_M1_ChromoScalar>();
-    const auto n = vec. template GetChromoDataSize<CS_M1_ChromoScalar>();
+    const auto* p = vec.GetChromoData();
+    const auto n = vec.GetSize();
+
     for (size_t i=0; i < n; ++i)
     {
         const auto x = p[i];
@@ -77,10 +58,11 @@ static auto mutateNormalDist = [](auto& rng, const auto& vec, float rate)
 {
     auto newVec = vec;
     const auto [mean, stddev] = calcMeanAndStddev(vec);
+    auto* p = newVec.GetChromoData();
+    const auto n = newVec.GetSize();
+
     std::normal_distribution<float> nor(mean, stddev);
     std::uniform_real_distribution<float> uni(0.0, 1.0);
-    auto* p = newVec. template GetChromoData<CS_M1_ChromoScalar>();
-    const auto n = newVec. template GetChromoDataSize<CS_M1_ChromoScalar>();
     for (size_t i=0; i < n; ++i)
     {
         if (uni(rng) < rate)
@@ -93,8 +75,8 @@ static auto mutateScaled = [](auto& rng, const auto& vec, float rate)
     auto newVec = vec;
     double absSum = 0;
 
-    auto* p = newVec. template GetChromoData<CS_M1_ChromoScalar>();
-    const auto n = newVec. template GetChromoDataSize<CS_M1_ChromoScalar>();
+    auto* p = newVec.GetChromoData();
+    const auto n = newVec.GetSize();
     for (size_t i=0; i < n; ++i)
         absSum += std::abs(p[i]);
 
