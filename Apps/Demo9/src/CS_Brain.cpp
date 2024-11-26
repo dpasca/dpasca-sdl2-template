@@ -34,6 +34,7 @@ static inline size_t calcHiddenN2(size_t insN, size_t outsN)
 template <typename T>
 class SimpleNN
 {
+    static constexpr bool USE_XAVIER_INIT = true;
 public:
     using Vec = CSM_VecT<T>;
     using Mat = CSM_MatT<T>;
@@ -79,15 +80,32 @@ public:
     {
         std::random_device rd;
         std::mt19937 gen( seed ? seed : rd() );
-        std::uniform_real_distribution<T> dis((T)-1.0, (T)1.0);
-
-        constexpr auto BIAS_SCALE = (T)0.1;
-
-        // initialize weights and biases with random values
-        for (auto& l : mLs)
+        if (USE_XAVIER_INIT)
         {
-            l.Wei.ForEach([&](auto& x){ x = dis(gen); });
-            l.Bia.ForEach([&](auto& x){ x = BIAS_SCALE * dis(gen); });
+            // use Xavier initialization
+            const T SQRT_2 = (T)std::sqrt(2.0);
+            std::normal_distribution<T> dis((T)0.0, (T)1.0 / SQRT_2);
+
+            // initialize weights and biases with random values
+            for (auto& l : mLs)
+            {
+                l.Wei.ForEach([&](auto& x){ x = dis(gen); });
+                l.Bia.ForEach([&](auto& x){ x = dis(gen); });
+            }
+        }
+        else
+        {
+            // use random initialization
+            std::uniform_real_distribution<T> dis((T)-1.0, (T)1.0);
+
+            constexpr auto BIAS_SCALE = (T)0.1;
+
+            // initialize weights and biases with random values
+            for (auto& l : mLs)
+            {
+                l.Wei.ForEach([&](auto& x){ x = dis(gen); });
+                l.Bia.ForEach([&](auto& x){ x = BIAS_SCALE * dis(gen); });
+            }
         }
     }
 
