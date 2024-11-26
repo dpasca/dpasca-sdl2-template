@@ -24,8 +24,6 @@ public: // For now...
     std::vector<CS_SCALAR> mChromoData;
 
 public:
-    CS_Chromo() = default;
-
     CS_Chromo CreateEmptyClone() const
     {
         CS_Chromo chromo;
@@ -37,14 +35,6 @@ public:
     const CS_SCALAR* GetChromoData() const { return mChromoData.data(); }
 
     size_t GetSize() const { return mChromoData.size(); }
-
-    std::string ToString() const
-    {
-        std::ostringstream oss;
-        for (const auto& val : mChromoData)
-            oss << val << " ";
-        return oss.str();
-    }
 };
 
 #endif

@@ -15,7 +15,7 @@
 #include <vector>
 #include <memory>
 #include "CS_Brain.h"
-#include "CS_TrainBase.h"
+#include "CS_Train.h"
 
 //==================================================================
 static inline bool isFutureReady( const std::future<void> &f )
@@ -78,20 +78,16 @@ public:
 //==================================================================
 class CS_Trainer
 {
-    template <typename T> using function = std::function<T>;
-    template <typename T> using vector = std::vector<T>;
-    template <typename T> using unique_ptr = std::unique_ptr<T>;
-
 public:
-    using CreateBrainFnT      = function<unique_ptr<CS_Brain>(const CS_Chromo&, size_t, size_t)>;
-    using EvalBrainT          = function<double (const CS_Brain&, std::atomic<bool>&)>;
-    using OnEpochEndFnT       = function<vector<CS_Chromo>(size_t,const CS_Chromo*,const double*,size_t)>;
+    using CreateBrainFnT      = std::function<std::unique_ptr<CS_Brain>(const CS_Chromo&, size_t, size_t)>;
+    using EvalBrainT          = std::function<double (const CS_Brain&, std::atomic<bool>&)>;
+    using OnEpochEndFnT       = std::function<std::vector<CS_Chromo>(size_t,const CS_Chromo*,const double*,size_t)>;
 
 private:
     std::future<void>   mFuture;
     std::atomic<bool>   mShutdownReq {};
     size_t              mCurEpochN {};
-    unique_ptr<CS_TrainBase> moTrain;
+    std::unique_ptr<CS_Train> moTrain;
 
 public:
     struct Params
@@ -100,7 +96,7 @@ public:
         EvalBrainT      evalBrainFn;
     };
 public:
-    CS_Trainer(const Params& par, unique_ptr<CS_TrainBase> &&oTrain)
+    CS_Trainer(const Params& par, std::unique_ptr<CS_Train> &&oTrain)
         : moTrain( std::move(oTrain))
     {
         mFuture = std::async(std::launch::async, [this,par=par](){ ctor_execution(par); });
@@ -148,7 +144,7 @@ private:
                 break;
 
             // generate the new chromosomes
-            vector<CS_ChromoInfo> infos;
+            std::vector<CS_ChromoInfo> infos;
             infos.resize(popN);
             for (size_t pidx=0; pidx < popN; ++pidx)
             {

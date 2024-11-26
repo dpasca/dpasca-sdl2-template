@@ -14,7 +14,6 @@
 #include <memory>
 #include <mutex>
 #include <random>
-#include "CS_TrainBase.h"
 #include "CS_Brain.h"
 
 //==================================================================
@@ -93,12 +92,33 @@ static auto mutateScaled = [](auto& rng, const auto& vec, float rate)
 };
 
 //==================================================================
-//==================================================================
-class CS_Train : public CS_TrainBase
+struct CS_ChromoInfo
 {
+    double    ci_fitness {0.0};
+    size_t    ci_epochIdx {0};
+    size_t    ci_popIdx {0};
+
+    std::string MakeStrID() const
+    {
+        std::stringstream ss;
+        ss << "epoch:" << ci_epochIdx << ",idx:" << ci_popIdx;
+        return ss.str();
+    }
+};
+
+//==================================================================
+class CS_Train
+{
+    template <typename T> using function = std::function<T>;
+    template <typename T> using vector = std::vector<T>;
+    template <typename T> using unique_ptr = std::unique_ptr<T>;
+
     static constexpr size_t INIT_POP_N          = 100;
     static constexpr size_t TOP_FOR_SELECTION_N = 10;
     static constexpr size_t TOP_FOR_REPORT_N    = 10;
+
+    const size_t mInsN;
+    const size_t mOutsN;
 
     // best chromos list just for display
     std::mutex                 mBestChromosMutex;
@@ -107,21 +127,20 @@ class CS_Train : public CS_TrainBase
 
 public:
     CS_Train(size_t insN, size_t outsN)
-        : CS_TrainBase(insN, outsN)
+        : mInsN(insN)
+        , mOutsN(outsN)
     {
     }
 
-    ~CS_Train() override = default;
-
     //==================================================================
-    unique_ptr<CS_Brain> CreateBrain(const CS_Chromo &chromo) override
+    unique_ptr<CS_Brain> CreateBrain(const CS_Chromo &chromo)
     {
         return std::make_unique<CS_Brain>(chromo, mInsN, mOutsN);
     }
 
     //==================================================================
     // initial list of chromosomes
-    vector<CS_Chromo>  MakeStartChromos() override
+    vector<CS_Chromo>  MakeStartChromos()
     {
         std::vector<CS_Chromo> chromos;
         for (size_t i=0; i < INIT_POP_N; ++i)
@@ -139,7 +158,7 @@ public:
             size_t epochIdx,
             const CS_Chromo* pChromos,
             const CS_ChromoInfo* pInfos,
-            size_t n) override
+            size_t n)
     {
         // sort by the cost
         std::vector<std::pair<const CS_Chromo*, const CS_ChromoInfo*>> pSorted;
@@ -195,7 +214,7 @@ public:
             const std::function<void(
                 const std::vector<CS_Chromo>&,
                 const std::vector<CS_ChromoInfo>&
-                )>& func) override
+                )>& func)
     {
         std::lock_guard<std::mutex> lock(mBestChromosMutex);
         func(mBestChromos, mBestCInfos);
