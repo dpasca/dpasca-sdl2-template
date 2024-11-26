@@ -21,16 +21,6 @@
 using namespace std;
 
 //==================================================================
-static inline size_t calcHiddenN1(size_t insN, size_t outsN)
-{
-    return ((insN + outsN) + 1) / 2;
-}
-static inline size_t calcHiddenN2(size_t insN, size_t outsN)
-{
-    return std::max( ((insN + outsN) + 3) / 4, outsN+1 );
-}
-
-//==================================================================
 template <typename T>
 class SimpleNN
 {
