@@ -19,8 +19,6 @@
 #include "CS_M1_Types.h"
 #include "CS_M1_Brain.h"
 
-//#define USE_TWO_HIDDEN_LAYERS
-
 using namespace std;
 
 //==================================================================
@@ -170,14 +168,12 @@ template class SimpleNN<CS_SCALAR>;
 //==================================================================
 static std::vector<size_t> makeLayerNs(size_t insN, size_t outsN)
 {
-#ifdef USE_TWO_HIDDEN_LAYERS
-    const size_t hid1N = calcHiddenN1(insN, outsN);
-    const size_t hid2N = calcHiddenN2(insN, outsN);
-    return std::vector<size_t>{insN, hid1N, hid2N, outsN};
-#else
-    const size_t hidN = calcHiddenN1(insN, outsN);
-    return std::vector<size_t>{insN, hidN, outsN};
-#endif
+    return std::vector<size_t>{
+        insN,
+        std::max((size_t)(insN * 1.25), outsN),
+        std::max((size_t)(insN * 0.75), outsN),
+        std::max((size_t)(insN * 0.25), outsN),
+        outsN};
 }
 
 //==================================================================

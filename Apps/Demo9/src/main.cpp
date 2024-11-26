@@ -389,7 +389,9 @@ void DemoMain::doStartTraining()
         // run a simulation for each variant
         for (size_t sidx=0; sidx < SIM_TRAIN_VARIANTS_N; ++sidx)
         {
-            const auto seed = (uint32_t)(sidx + 0);
+            // We start with a random seed from a base that should not intersect with the validation set
+            // e.g. Don't want to train on seed 0, 1 and then validate on 0, 1
+            const auto seed = (uint32_t)(sidx + SIM_TRAIN_SEED_BASE);
 
             // create a simulation for the given scenario and brain
             auto oSim = std::make_unique<Simulation>(seed, &brain);
