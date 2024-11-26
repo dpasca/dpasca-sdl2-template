@@ -4,8 +4,8 @@ BASHSCRIPTDIR=$(cd "$(dirname "$0")" || exit; pwd)
 EXTDIR="${BASHSCRIPTDIR}/_externals"
 #GLMVER="0.9.9.8"
 GLMVER="efec5db081e3aad807d0731e172ac597f6a39447"
-SDLVER="release-2.26.5"
-IMGUIVER="1668693bcfbc8669db60e775fd19f3a4ac26fe89"
+SDLVER="release-2.30.x"
+IMGUIVER="5b7feebfd8f3e58392d955b4c8ae01f77eae25ed"
 FMTVER="7f46cb75b8c0b1e69edeaf728cddbd0cb72736ba"
 
 checkout_revision(){

@@ -19,7 +19,7 @@
 #  include "imgui_impl_opengl3.h"
 #  include "imgui_impl_opengl2.h"
 # endif
-# include "imgui_impl_sdlrenderer.h"
+# include "imgui_impl_sdlrenderer2.h"
 # include "imgui_internal.h"
 #endif
 #include "MinimalSDLApp.h"
@@ -329,7 +329,7 @@ MinimalSDLApp::MinimalSDLApp( int argc, char *argv[], int w, int h, int flags )
     if ( mpRenderer )
     {
         ImGui_ImplSDL2_InitForSDLRenderer( mpWindow, mpRenderer );
-        ImGui_ImplSDLRenderer_Init( mpRenderer );
+        ImGui_ImplSDLRenderer2_Init( mpRenderer );
     }
 #endif
 
@@ -393,11 +393,10 @@ bool MinimalSDLApp::BeginFrame()
     else
 #endif
     {
-        ImGui_ImplSDLRenderer_NewFrame();
+        ImGui_ImplSDLRenderer2_NewFrame();
     }
 
-    ImGui_ImplSDL2_NewFrame( mpWindow );
-
+    ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 #endif
 
@@ -422,7 +421,7 @@ void MinimalSDLApp::EndFrame()
     else
 # endif
     {
-        ImGui_ImplSDLRenderer_RenderDrawData( ImGui::GetDrawData() );
+        ImGui_ImplSDLRenderer2_RenderDrawData( ImGui::GetDrawData(), mpRenderer );
     }
 #endif
 
