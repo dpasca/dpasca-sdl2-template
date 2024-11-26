@@ -16,7 +16,6 @@
 #include <numeric>
 
 #include "CS_Math.h"
-#include "CS_M1_Types.h"
 #include "CS_M1_Brain.h"
 
 using namespace std;

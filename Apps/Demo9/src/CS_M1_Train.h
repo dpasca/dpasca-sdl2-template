@@ -15,7 +15,6 @@
 #include <mutex>
 #include <random>
 #include "CS_TrainBase.h"
-#include "CS_M1_Types.h"
 #include "CS_M1_Brain.h"
 
 //==================================================================
@@ -70,6 +69,7 @@ static auto mutateNormalDist = [](auto& rng, const auto& vec, float rate)
     }
     return newVec;
 };
+
 static auto mutateScaled = [](auto& rng, const auto& vec, float rate)
 {
     auto newVec = vec;
@@ -81,7 +81,6 @@ static auto mutateScaled = [](auto& rng, const auto& vec, float rate)
         absSum += std::abs(p[i]);
 
     const auto avg = (CS_SCALAR)(absSum / (double)n);
-
     const auto useSca = std::max( (CS_SCALAR)1.0, avg );
 
     std::uniform_real_distribution<float> uni(0.0, 1.0);

@@ -33,23 +33,10 @@ public:
         return chromo;
     }
 
-    void SetChromoData(const CS_SCALAR* pData, size_t size)
-    {
-        mChromoData.assign(pData, pData + size);
-    }
-
-    void SetChromoData(CS_SCALAR data)
-    {
-        mChromoData.assign(1, data);
-    }
-
     CS_SCALAR* GetChromoData() { return mChromoData.data(); }
     const CS_SCALAR* GetChromoData() const { return mChromoData.data(); }
 
     size_t GetSize() const { return mChromoData.size(); }
-
-    void Clear() { mChromoData.clear(); }
-    bool IsEmpty() const { return mChromoData.empty(); }
 
     std::string ToString() const
     {
