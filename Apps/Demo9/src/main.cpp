@@ -18,7 +18,8 @@
 #include "MathBase.h"
 #include "ImmGL.h"
 #include "MinimalSDLApp.h"
-#include "CS_ModelFactory.h"
+#include "CS_M1_Brain.h"
+#include "CS_M1_Train.h"
 #include "CS_Trainer.h"
 #include "Simulation.h"
 
@@ -299,8 +300,7 @@ void DemoMain::AnimateDemo(float dt)
     {
         if (!mBestChromos.empty())
         {
-            moPlayBrain = CS_ModelFactory::CreateBrain(
-                mCurModelIdx,
+            moPlayBrain = std::make_unique<CS_M1_Brain>(
                 mBestChromos[0],
                 Vehicle::SENS_N,
                 Vehicle::CTRL_N);
@@ -409,11 +409,7 @@ void DemoMain::doStartTraining()
     // create the trainer
     moTrainer = std::make_unique<CS_Trainer>(
         par,
-        CS_ModelFactory::CreateTrain(
-            mCurModelIdx,    // model index (just one for now)
-            Vehicle::SENS_N, // number of sensors (brain's input)
-            Vehicle::CTRL_N) // number of controls (brain's output)
-    );
+        std::make_unique<CS_M1_Train>(Vehicle::SENS_N, Vehicle::CTRL_N));
 
     mLastEpoch = 0;
     mLastEpochTimeS = GetSteadyTimeS();
@@ -450,23 +446,7 @@ void DemoMain::handleTrainUI()
             doStartTraining();
         }
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(150);
-        if (ImGui::BeginCombo("##Model", CS_ModelFactory::GetModelName(mCurModelIdx).c_str()))
-        {
-            const auto n = CS_ModelFactory::GetModelsN();
-            for (size_t i=0; i < n; ++i)
-            {
-                const bool isSelected = (mCurModelIdx == i);
-                if (ImGui::Selectable(CS_ModelFactory::GetModelName(i).c_str(), isSelected))
-                {
-                    mCurModelIdx = i;
-                }
-                if (isSelected)
-                    ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
-
+        ImGui::Text("Model: Model 1");
     }
 
     if (moTrainer)
